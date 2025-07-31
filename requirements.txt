@@ -1,0 +1,26 @@
+# Core dependencies
+numpy>=1.21.0
+scipy>=1.7.0
+scikit-image>=0.19.0
+torch>=1.12.0
+torchvision>=0.13.0
+pillow>=8.3.0
+numba>=0.56.0
+
+# Data handling
+h5py>=3.6.0
+xarray>=0.19.0
+dask>=2021.9.0
+
+# Visualization
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# CLI and utilities
+click>=8.0.0
+tqdm>=4.62.0
+pyyaml>=6.0
+
+# Optional ML frameworks
+# diffusers>=0.21.0
+# transformers>=4.21.0
