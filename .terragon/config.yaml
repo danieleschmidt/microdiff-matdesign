@@ -1,0 +1,64 @@
+scoring:
+  weights:
+    developing:
+      wsjf: 0.5
+      ice: 0.2
+      technicalDebt: 0.2
+      security: 0.1
+  
+  thresholds:
+    minScore: 10
+    maxRisk: 0.8
+    securityBoost: 2.0
+    complianceBoost: 1.8
+
+discovery:
+  sources:
+    - gitHistory
+    - staticAnalysis
+    - issueTrackers
+    - vulnerabilityDatabases
+    - performanceMonitoring
+  
+  tools:
+    staticAnalysis:
+      - flake8
+      - mypy
+      - bandit
+      - safety
+    security:
+      - safety
+      - bandit
+      - pip-audit
+    performance:
+      - pytest-benchmark
+
+execution:
+  maxConcurrentTasks: 1
+  testRequirements:
+    minCoverage: 80
+    performanceRegression: 5
+  rollbackTriggers:
+    - testFailure
+    - buildFailure
+    - securityViolation
+
+repository:
+  maturity: developing
+  primaryLanguage: python
+  framework: pytorch
+  domain: ml_materials_science
+  
+assessment:
+  strengths:
+    - Clear documentation structure
+    - Proper Python package layout
+    - Basic testing framework
+    - Security policy present
+  
+  gaps:
+    - No CI/CD automation
+    - Limited test coverage
+    - No dependency scanning
+    - No performance monitoring
+    - Missing development tools setup
