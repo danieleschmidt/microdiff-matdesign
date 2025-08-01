@@ -1,0 +1,165 @@
+version: '3.8'
+
+# Development-specific overrides
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  microdiff-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - .:/app
+      - microdiff-models:/app/models
+      - microdiff-data-dev:/app/data
+      - microdiff-cache-dev:/root/.cache
+      - ~/.gitconfig:/root/.gitconfig:ro
+      - ~/.ssh:/root/.ssh:ro
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - RELOAD=true
+      - PYTHONPATH=/app
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-}
+    ports:
+      - "8888:8888"  # Jupyter Lab
+      - "6006:6006"  # TensorBoard  
+      - "3000:3000"  # Development server
+      - "8080:8080"  # API server
+      - "9090:9090"  # Metrics
+    command: >
+      bash -c "
+        echo 'Setting up development environment...' &&
+        pip install -e '.[dev,gpu,full]' &&
+        pre-commit install &&
+        echo 'Starting Jupyter Lab...' &&
+        jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --notebook-dir=/app --ServerApp.token=''
+      "
+    stdin_open: true
+    tty: true
+    
+  # Fast testing service for development
+  microdiff-test-fast:
+    build:
+      context: .
+      dockerfile: Dockerfile  
+      target: testing
+    volumes:
+      - .:/app
+      - microdiff-test-cache-dev:/root/.cache
+    environment:
+      - ENVIRONMENT=testing
+      - PYTHONPATH=/app
+      - FORCE_CPU_TESTS=1
+    command: >
+      bash -c "
+        echo 'Running fast tests...' &&
+        python -m pytest tests/unit/ -v --tb=short -m 'not slow and not gpu' --maxfail=5
+      "
+    profiles:
+      - testing
+
+  # Code quality service
+  microdiff-quality:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONPATH=/app
+    command: >
+      bash -c "
+        echo 'Running code quality checks...' &&
+        echo '=== Black formatting ===' &&
+        black --check --diff . &&
+        echo '=== Ruff linting ===' &&
+        ruff check . &&
+        echo '=== MyPy type checking ===' &&
+        mypy microdiff_matdesign/ &&
+        echo '=== Bandit security scan ===' &&
+        bandit -r microdiff_matdesign/ -f json -o bandit-report.json &&
+        echo 'All quality checks passed!'
+      "
+    profiles:
+      - quality
+
+  # Documentation development service
+  microdiff-docs-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: docs
+    volumes:
+      - ./docs:/app/docs
+      - ./microdiff_matdesign:/app/microdiff_matdesign
+    ports:
+      - "8000:8000"
+    environment:
+      - DOCS_LIVE_RELOAD=true
+    command: >
+      bash -c "
+        echo 'Building documentation with live reload...' &&
+        pip install sphinx-autobuild &&
+        sphinx-autobuild docs docs/_build/html --host 0.0.0.0 --port 8000 --open-browser
+      "
+    profiles:
+      - docs
+
+  # Database for development
+  postgres-dev:
+    extends:
+      service: postgres
+    environment:
+      POSTGRES_DB: microdiff_dev
+      POSTGRES_USER: microdiff_dev
+      POSTGRES_PASSWORD: dev_password
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts
+    volumes:
+      - microdiff-postgres-data-dev:/var/lib/postgresql/data
+
+  # Redis for development  
+  redis-dev:
+    extends:
+      service: redis
+    ports:
+      - "6380:6379"  # Different port
+    volumes:
+      - microdiff-redis-data-dev:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # MLflow for development
+  mlflow-dev:
+    extends:
+      service: mlflow
+    ports:
+      - "5001:5000"  # Different port
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=postgresql://microdiff_dev:dev_password@postgres-dev:5432/microdiff_dev
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow/artifacts
+    volumes:
+      - microdiff-mlflow-data-dev:/mlflow
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+    profiles:
+      - mlflow
+
+# Development-specific volumes
+volumes:
+  microdiff-data-dev:
+    driver: local
+  microdiff-cache-dev:
+    driver: local
+  microdiff-test-cache-dev:
+    driver: local
+  microdiff-postgres-data-dev:
+    driver: local
+  microdiff-redis-data-dev:
+    driver: local
+  microdiff-mlflow-data-dev:
+    driver: local

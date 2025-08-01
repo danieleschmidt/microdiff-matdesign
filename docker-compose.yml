@@ -1,0 +1,294 @@
+version: '3.8'
+
+services:
+  # Main development service
+  microdiff-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+      args:
+        CUDA_VERSION: 11.8
+        PYTHON_VERSION: 3.11
+    container_name: microdiff-matdesign-dev
+    volumes:
+      - .:/app
+      - microdiff-models:/app/models
+      - microdiff-data:/app/data
+      - microdiff-cache:/root/.cache
+    ports:
+      - "8888:8888"  # Jupyter Lab
+      - "6006:6006"  # TensorBoard
+      - "3000:3000"  # Development server
+    environment:
+      - ENVIRONMENT=development
+      - PYTHONPATH=/app
+      - CUDA_VISIBLE_DEVICES=0
+    env_file:
+      - .env
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      bash -c "
+        echo 'Starting MicroDiff-MatDesign development environment...' &&
+        jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --notebook-dir=/app
+      "
+    networks:
+      - microdiff-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/lab"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Production service
+  microdiff-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: microdiff-matdesign-prod
+    volumes:
+      - microdiff-models:/app/models:ro
+      - microdiff-data:/app/data:ro
+      - microdiff-logs:/app/logs
+    ports:
+      - "8080:8080"  # API server
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - WORKERS=4
+      - MAX_REQUESTS=1000
+      - MAX_REQUESTS_JITTER=100
+    env_file:
+      - .env
+    runtime: nvidia
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - microdiff-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import microdiff_matdesign; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Testing service
+  microdiff-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: testing
+    container_name: microdiff-matdesign-test
+    volumes:
+      - .:/app
+      - microdiff-test-cache:/root/.cache
+    environment:
+      - ENVIRONMENT=testing
+      - PYTHONPATH=/app
+    env_file:
+      - .env
+    command: >
+      bash -c "
+        echo 'Running MicroDiff-MatDesign tests...' &&
+        python -m pytest tests/ -v --tb=short --cov=microdiff_matdesign --cov-report=html --cov-report=term-missing
+      "
+    networks:
+      - microdiff-network
+
+  # Documentation service
+  microdiff-docs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: docs
+    container_name: microdiff-matdesign-docs
+    ports:
+      - "8000:8000"  # Documentation server
+    volumes:
+      - ./docs:/app/docs
+    networks:
+      - microdiff-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: microdiff-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - microdiff-redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    networks:
+      - microdiff-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL for experiment tracking (optional) 
+  postgres:
+    image: postgres:15-alpine
+    container_name: microdiff-postgres
+    environment:
+      POSTGRES_DB: microdiff
+      POSTGRES_USER: microdiff
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-microdiff_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - microdiff-postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - microdiff-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U microdiff"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MLflow tracking server (optional)
+  mlflow:
+    image: python:3.11-slim
+    container_name: microdiff-mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - microdiff-mlflow-data:/mlflow
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=postgresql://microdiff:${POSTGRES_PASSWORD:-microdiff_password}@postgres:5432/mlflow
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow/artifacts
+    command: >
+      bash -c "
+        pip install mlflow psycopg2-binary &&
+        mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql://microdiff:${POSTGRES_PASSWORD:-microdiff_password}@postgres:5432/mlflow --default-artifact-root /mlflow/artifacts
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - microdiff-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus monitoring (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: microdiff-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - microdiff-prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - microdiff-network
+
+  # Grafana dashboard (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: microdiff-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - microdiff-grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - microdiff-network
+    depends_on:
+      - prometheus
+
+  # Nginx reverse proxy (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: microdiff-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - microdiff-prod
+      - microdiff-docs
+    networks:
+      - microdiff-network
+    profiles:
+      - production
+
+# Named volumes for persistent data
+volumes:
+  microdiff-models:
+    driver: local
+  microdiff-data:
+    driver: local
+  microdiff-cache:
+    driver: local
+  microdiff-test-cache:
+    driver: local
+  microdiff-logs:
+    driver: local
+  microdiff-redis-data:
+    driver: local
+  microdiff-postgres-data:
+    driver: local
+  microdiff-mlflow-data:
+    driver: local
+  microdiff-prometheus-data:
+    driver: local
+  microdiff-grafana-data:
+    driver: local
+
+# Networks
+networks:
+  microdiff-network:
+    driver: bridge
+
+# Development override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+x-dev-overrides: &dev-overrides
+  microdiff-dev:
+    build:
+      target: development
+    volumes:
+      - .:/app
+      - /app/.git  # Exclude .git directory
+    environment:
+      - DEBUG=true
+      - RELOAD=true
+    profiles:
+      - dev
