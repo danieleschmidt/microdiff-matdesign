@@ -147,4 +147,54 @@ api_keys.txt
 # Build artifacts
 .terragon/cache/
 .terragon/artifacts/
-EOF < /dev/null
+
+# Docker
+.dockerignore
+
+# Profiling
+profiling/
+*.prof
+
+# Benchmarks
+benchmarks/results/
+*.benchmark
+
+# IDE specific files
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store?
+ehthumbs.db
+Icon?
+
+# Configuration override files
+local_config.yaml
+local_settings.py
+
+# Testing artifacts
+.coverage.*
+htmlcov/
+.pytest_cache/
+test-results/
+
+# Documentation build
+docs/_build/
+docs/api/
+site/
+
+# Development databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache directories
+.cache/
+.ruff_cache/
+.mypy_cache/
+__pycache__/
+
+# Environment files
+.env.*
+!.env.example
