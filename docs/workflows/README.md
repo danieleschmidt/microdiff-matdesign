@@ -1,176 +1,278 @@
 # GitHub Actions Workflows
 
-This directory contains documentation for the required GitHub Actions workflows for this project.
+This directory contains comprehensive GitHub Actions workflow templates and documentation for the MicroDiff-MatDesign project.
 
-## Required Workflows
+## 🚀 Available Workflow Templates
 
-### 1. CI/CD Pipeline (`.github/workflows/ci.yml`)
+### Core CI/CD Workflows
 
-```yaml
-name: CI/CD Pipeline
+| Workflow | Purpose | Trigger | Duration |
+|----------|---------|---------|----------|
+| **[ci.yml](examples/ci.yml)** | Continuous Integration | Push, PR | ~15-30 min |
+| **[cd.yml](examples/cd.yml)** | Continuous Deployment | Main push, Tags | ~20-45 min |
+| **[security-scan.yml](examples/security-scan.yml)** | Security Scanning | Push, PR, Schedule | ~20-30 min |
+| **[dependency-update.yml](examples/dependency-update.yml)** | Dependency Updates | Schedule, Manual | ~10-20 min |
 
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
+### Workflow Features
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.8, 3.9, "3.10", "3.11"]
-    
-    steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-    
-    - name: Lint with flake8
-      run: flake8 microdiff_matdesign tests
-    
-    - name: Type check with mypy
-      run: mypy microdiff_matdesign
-    
-    - name: Security check
-      run: |
-        bandit -r microdiff_matdesign
-        safety check
-    
-    - name: Test with pytest
-      run: pytest tests/ --cov=microdiff_matdesign --cov-report=xml
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-```
+#### 📋 Continuous Integration (ci.yml)
+- **Multi-Python testing** (3.8, 3.9, 3.10, 3.11)
+- **Code quality checks** (Black, Ruff, MyPy)
+- **Security scanning** (Bandit, Safety, Semgrep)
+- **Comprehensive testing** (Unit, Integration, E2E)
+- **Performance benchmarks**
+- **Docker image building and testing**
+- **Documentation verification**
+- **License compliance checking**
+- **Parallel execution** for faster feedback
 
-### 2. Security Scanning (`.github/workflows/security.yml`)
+#### 🚀 Continuous Deployment (cd.yml)
+- **Environment-specific deployments** (Staging, Production)
+- **Blue-green deployment strategy**
+- **Container security scanning**
+- **Automated rollback capability**
+- **Health checks and smoke tests**
+- **Image signing with Cosign**
+- **SBOM generation**
+- **Deployment notifications**
 
-```yaml
-name: Security Scan
+#### 🔒 Security Scanning (security-scan.yml)
+- **Static Application Security Testing (SAST)**
+  - CodeQL analysis
+  - Bandit security linting
+  - Semgrep static analysis
+  - Secret detection with TruffleHog
+- **Software Composition Analysis (SCA)**
+  - Safety vulnerability checking
+  - Pip-audit dependency scanning
+  - Snyk vulnerability scanning
+  - License compliance verification
+- **Container Security**
+  - Trivy vulnerability scanning
+  - Anchore Grype scanning
+  - Docker Scout analysis
+  - Hadolint Dockerfile linting
+- **Infrastructure as Code (IaC)**
+  - Checkov security scanning
+  - Terrascan analysis
+- **Dynamic Application Security Testing (DAST)**
+  - OWASP ZAP scanning
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  schedule:
-    - cron: '0 2 * * 1'  # Weekly Monday 2 AM
+#### 📦 Dependency Updates (dependency-update.yml)
+- **Automated dependency updates**
+  - Patch, minor, major version updates
+  - Security-focused updates
+  - Smart scheduling (weekly/monthly)
+- **Comprehensive testing**
+  - Multi-Python version validation
+  - Security vulnerability verification
+  - Performance impact assessment
+- **Pull request automation**
+  - Detailed change summaries
+  - Security impact analysis
+  - Automatic reviewer assignment
+- **Rollback capabilities**
 
-jobs:
-  security:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Run CodeQL Analysis
-      uses: github/codeql-action/init@v2
-      with:
-        languages: python
-    
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
-    
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-    
-    - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v2
-      with:
-        sarif_file: 'trivy-results.sarif'
-```
+## 🔧 Setup Instructions
 
-### 3. Dependency Updates (`.github/workflows/dependencies.yml`)
+### Prerequisites
 
-```yaml
-name: Update Dependencies
+1. **Repository Structure**
+   ```
+   .github/
+   └── workflows/
+       ├── ci.yml
+       ├── cd.yml
+       ├── security-scan.yml
+       └── dependency-update.yml
+   ```
 
-on:
-  schedule:
-    - cron: '0 3 * * 1'  # Weekly Monday 3 AM
-  workflow_dispatch:
+2. **Required Secrets**
+   ```bash
+   # Container Registry
+   GITHUB_TOKEN                    # Automatic (GitHub provides)
+   
+   # Deployment
+   STAGING_KUBECONFIG             # Base64 encoded kubeconfig
+   PRODUCTION_KUBECONFIG          # Base64 encoded kubeconfig
+   
+   # Monitoring & Notifications
+   SLACK_WEBHOOK_URL              # Slack notifications
+   SECURITY_SLACK_WEBHOOK_URL     # Security-specific notifications
+   GRAFANA_API_KEY               # Deployment annotations
+   
+   # External Services
+   CODECOV_TOKEN                 # Code coverage reporting
+   SNYK_TOKEN                    # Snyk security scanning
+   ```
 
-jobs:
-  update-dependencies:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Update pip-tools
-      run: |
-        python -m pip install --upgrade pip-tools
-        pip-compile --upgrade requirements.in
-    
-    - name: Create Pull Request
-      uses: peter-evans/create-pull-request@v5
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: 'chore: update dependencies'
-        title: 'Automated dependency updates'
-        body: |
-          Automated dependency updates generated by GitHub Actions.
-          
-          Please review the changes and ensure all tests pass.
-        branch: dependency-updates
-```
+3. **Repository Settings**
+   - Enable GitHub Actions
+   - Configure branch protection rules
+   - Set up required status checks
+   - Enable security alerts
+   - Configure Dependabot (optional, complements automated updates)
 
-## Integration Requirements
+### Manual Setup Steps
 
-To integrate these workflows:
+1. **Copy Workflow Files**
+   ```bash
+   mkdir -p .github/workflows
+   cp docs/workflows/examples/*.yml .github/workflows/
+   ```
 
-1. Create `.github/workflows/` directory in your repository
-2. Copy the YAML content above into respective files
-3. Configure secrets in GitHub repository settings:
-   - `CODECOV_TOKEN` for coverage reporting
-4. Enable CodeQL security scanning in repository settings
-5. Configure Dependabot for automated dependency updates
+2. **Configure Secrets**
+   - Go to Repository Settings → Secrets and variables → Actions
+   - Add all required secrets listed above
 
-## Workflow Features
+3. **Set Up Environments**
+   - Create `staging` and `production` environments
+   - Configure protection rules for production
+   - Add environment-specific secrets
 
-- **Multi-Python version testing** (3.8-3.11)
-- **Comprehensive quality gates** (lint, type-check, security, tests)
-- **Security scanning** with CodeQL and Trivy
-- **Coverage reporting** to Codecov
-- **Automated dependency updates** with safety checks
-- **Matrix strategy** for parallel testing
+4. **Configure Branch Protection**
+   ```json
+   {
+     "required_status_checks": {
+       "strict": true,
+       "contexts": [
+         "CI Success",
+         "Security Scan",
+         "Code Quality"
+       ]
+     },
+     "enforce_admins": true,
+     "required_pull_request_reviews": {
+       "required_approving_review_count": 2,
+       "dismiss_stale_reviews": true,
+       "require_code_owner_reviews": true
+     },
+     "restrictions": null
+   }
+   ```
 
-## Rollback Procedures
+## 📊 Workflow Monitoring
 
-If workflows fail or cause issues:
+### Success Metrics
+- **CI Success Rate**: > 95%
+- **Deployment Success Rate**: > 99%
+- **Security Scan Coverage**: 100%
+- **Mean Time to Deployment**: < 30 minutes
+- **Mean Time to Recovery**: < 15 minutes
 
-1. **Disable workflow**: Go to Actions tab → Select workflow → Disable
-2. **Revert PR**: Use GitHub's revert feature on problematic PR
-3. **Emergency fix**: Create hotfix branch bypassing some checks
-4. **Rollback deployment**: Use previous release tag
+### Key Performance Indicators
+- Build duration trends
+- Test coverage percentage
+- Security vulnerability count
+- Deployment frequency
+- Failed deployment count
 
-## Monitoring and Alerts
+### Alerting Setup
+Configure alerts for:
+- Failed main branch builds
+- Security vulnerabilities discovered
+- Deployment failures
+- Long-running workflows
+- Dependency update conflicts
 
-Set up notifications for:
-- Failed builds on main branch
-- Security vulnerability discoveries
-- Dependency update failures
-- Coverage threshold drops
+## 🛡️ Security Considerations
 
-Configure in repository Settings → Notifications.
+### Security Scanning Coverage
+- **Code**: Static analysis, secret detection
+- **Dependencies**: Vulnerability scanning, license compliance
+- **Containers**: Image security, best practices
+- **Infrastructure**: IaC security scanning
+- **Runtime**: Dynamic application security testing
+
+### Security Policies
+- All workflows run with minimal required permissions
+- Secrets are properly scoped and rotated
+- Container images are signed and verified
+- Deployment requires security scan approval
+- Emergency procedures for security incidents
+
+## 🔄 Rollback Procedures
+
+### Workflow Failure Recovery
+
+1. **Disable Problematic Workflow**
+   ```bash
+   # Via GitHub CLI
+   gh workflow disable "workflow-name.yml"
+   ```
+
+2. **Emergency Hotfix**
+   ```bash
+   git checkout main
+   git checkout -b hotfix/emergency-fix
+   # Make minimal required changes
+   git commit -m "hotfix: emergency fix"
+   git push origin hotfix/emergency-fix
+   # Create PR with bypass reviews (if configured)
+   ```
+
+3. **Deployment Rollback**
+   ```bash
+   # Automatic rollback triggered by health check failures
+   # Manual rollback via workflow_dispatch
+   gh workflow run cd.yml -f environment=production -f rollback=true
+   ```
+
+### Recovery Checklist
+- [ ] Identify root cause
+- [ ] Implement immediate fix
+- [ ] Verify fix in staging
+- [ ] Deploy fix to production
+- [ ] Monitor for stability
+- [ ] Document incident
+- [ ] Update procedures
+
+## 📈 Optimization Tips
+
+### Performance Optimization
+- Use matrix strategies for parallel execution
+- Cache dependencies and build artifacts
+- Optimize Docker layer caching
+- Use conditional job execution
+- Implement smart test selection
+
+### Cost Optimization
+- Right-size runner instances
+- Use self-hosted runners for large workloads
+- Implement workflow timeout limits
+- Cache external dependencies
+- Optimize container image sizes
+
+### Developer Experience
+- Provide clear workflow status feedback
+- Include detailed failure messages
+- Generate comprehensive test reports
+- Automatic PR comments with results
+- Integration with IDE/development tools
+
+## 🤝 Contributing to Workflows
+
+### Modification Guidelines
+1. Test changes in feature branches
+2. Validate with realistic scenarios
+3. Update documentation
+4. Consider backward compatibility
+5. Review security implications
+
+### Best Practices
+- Use semantic versioning for action references
+- Include timeout limits for all jobs
+- Implement proper error handling
+- Use descriptive job and step names
+- Include comprehensive logging
+
+## 📚 Additional Resources
+
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [Security Best Practices](https://docs.github.com/en/actions/security-guides)
+- [Workflow Syntax Reference](https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions)
+- [Action Marketplace](https://github.com/marketplace?type=actions)
+
+---
+
+**Note**: These workflows require manual setup due to GitHub App permission limitations. Repository maintainers must create the actual workflow files from these templates.

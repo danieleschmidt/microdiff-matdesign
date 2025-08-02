@@ -1,0 +1,198 @@
+global:
+  smtp_smarthost: 'smtp.example.com:587'
+  smtp_from: 'alerts@microdiff.example.com'
+  smtp_auth_username: 'alerts@microdiff.example.com'
+  smtp_auth_password: 'smtp_password'
+  
+  # Slack configuration
+  slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default'
+  
+  routes:
+  # Critical alerts go to PagerDuty and Slack
+  - match:
+      severity: critical
+    receiver: 'critical-alerts'
+    group_wait: 5s
+    repeat_interval: 5m
+    
+  # Warning alerts go to Slack
+  - match:
+      severity: warning
+    receiver: 'warning-alerts'
+    group_wait: 30s
+    repeat_interval: 1h
+    
+  # ML-specific alerts go to ML team
+  - match:
+      team: ml-engineering
+    receiver: 'ml-team-alerts'
+    group_wait: 15s
+    repeat_interval: 30m
+    
+  # Platform alerts go to platform team
+  - match:
+      team: platform
+    receiver: 'platform-team-alerts'
+    group_wait: 30s
+    repeat_interval: 1h
+
+  # Silence alerts during maintenance windows
+  - match:
+      alertname: 'MaintenanceWindow'
+    receiver: 'null'
+
+# Inhibition rules to reduce noise
+inhibit_rules:
+  # If ServiceDown is firing, don't alert on HighLatency or HighErrorRate
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match_re:
+      alertname: '(HighLatency|HighErrorRate|LowTraffic)'
+    equal: ['service', 'instance']
+    
+  # If InstanceDown is firing, don't alert on instance-specific metrics
+  - source_match:
+      alertname: 'InstanceDown'
+    target_match_re:
+      alertname: '(HighCPUUsage|HighMemoryUsage|GPUMemoryHigh)'
+    equal: ['instance']
+
+# Receiver definitions
+receivers:
+  # Default receiver - minimal notifications
+  - name: 'default'
+    email_configs:
+    - to: 'devops@microdiff.example.com'
+      subject: '[MicroDiff] {{ .GroupLabels.alertname }}'
+      body: |
+        {{ range .Alerts }}
+        Alert: {{ .Annotations.summary }}
+        Description: {{ .Annotations.description }}
+        {{ end }}
+
+  # Critical alerts - PagerDuty + Slack + Email
+  - name: 'critical-alerts'
+    pagerduty_configs:
+    - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+      description: '{{ .GroupLabels.alertname }}: {{ .GroupLabels.service }}'
+      details:
+        alert_count: '{{ .Alerts | len }}'
+        alerts: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+      links:
+      - href: '{{ .GroupLabels.runbook_url }}'
+        text: 'Runbook'
+    
+    slack_configs:
+    - channel: '#microdiff-critical'
+      color: 'danger'
+      title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        *Summary:* {{ .Annotations.summary }}
+        *Description:* {{ .Annotations.description }}
+        *Runbook:* {{ .Annotations.runbook_url }}
+        {{ end }}
+      actions:
+      - type: button
+        text: 'View in Grafana'
+        url: 'https://grafana.example.com/d/microdiff-overview'
+      - type: button
+        text: 'Runbook'
+        url: '{{ .GroupLabels.runbook_url }}'
+    
+    email_configs:
+    - to: 'oncall@microdiff.example.com'
+      subject: '🚨 CRITICAL: [MicroDiff] {{ .GroupLabels.alertname }}'
+      html: |
+        <h2>Critical Alert: {{ .GroupLabels.alertname }}</h2>
+        {{ range .Alerts }}
+        <p><strong>Summary:</strong> {{ .Annotations.summary }}</p>
+        <p><strong>Description:</strong> {{ .Annotations.description }}</p>
+        <p><strong>Runbook:</strong> <a href="{{ .Annotations.runbook_url }}">{{ .Annotations.runbook_url }}</a></p>
+        {{ end }}
+
+  # Warning alerts - Slack + Email
+  - name: 'warning-alerts'
+    slack_configs:
+    - channel: '#microdiff-alerts'
+      color: 'warning'
+      title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        *Summary:* {{ .Annotations.summary }}
+        *Description:* {{ .Annotations.description }}
+        {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+        {{ end }}
+    
+    email_configs:
+    - to: 'engineering@microdiff.example.com'
+      subject: '⚠️ WARNING: [MicroDiff] {{ .GroupLabels.alertname }}'
+      body: |
+        {{ range .Alerts }}
+        Summary: {{ .Annotations.summary }}
+        Description: {{ .Annotations.description }}
+        {{ if .Annotations.runbook_url }}Runbook: {{ .Annotations.runbook_url }}{{ end }}
+        {{ end }}
+
+  # ML team specific alerts
+  - name: 'ml-team-alerts'
+    slack_configs:
+    - channel: '#microdiff-ml-alerts'
+      color: '{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}'
+      title: '🤖 ML Alert: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        *Summary:* {{ .Annotations.summary }}
+        *Description:* {{ .Annotations.description }}
+        *Model Type:* {{ .Labels.model_type }}
+        {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+        {{ end }}
+    
+    email_configs:
+    - to: 'ml-team@microdiff.example.com'
+      subject: '🤖 [MicroDiff ML] {{ .GroupLabels.alertname }}'
+      body: |
+        {{ range .Alerts }}
+        Summary: {{ .Annotations.summary }}
+        Description: {{ .Annotations.description }}
+        Model Type: {{ .Labels.model_type }}
+        {{ if .Annotations.runbook_url }}Runbook: {{ .Annotations.runbook_url }}{{ end }}
+        {{ end }}
+
+  # Platform team alerts
+  - name: 'platform-team-alerts'
+    slack_configs:
+    - channel: '#microdiff-platform'
+      color: '{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}'
+      title: '🏗️ Platform Alert: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        *Summary:* {{ .Annotations.summary }}
+        *Description:* {{ .Annotations.description }}
+        *Instance:* {{ .Labels.instance }}
+        {{ end }}
+    
+    email_configs:
+    - to: 'platform@microdiff.example.com'
+      subject: '🏗️ [MicroDiff Platform] {{ .GroupLabels.alertname }}'
+      body: |
+        {{ range .Alerts }}
+        Summary: {{ .Annotations.summary }}
+        Description: {{ .Annotations.description }}
+        Instance: {{ .Labels.instance }}
+        {{ end }}
+
+  # Null receiver for silenced alerts
+  - name: 'null'

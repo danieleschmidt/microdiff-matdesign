@@ -28,7 +28,7 @@ pip install microdiff-matdesign[gpu]
 pip install microdiff-matdesign[full]
 
 # From source
-git clone https://github.com/yourusername/microdiff-matdesign
+git clone https://github.com/danieleschmidt/microdiff-matdesign
 cd microdiff-matdesign
 pip install -e ".[dev]"
 ```
@@ -280,3 +280,77 @@ optimal_params = lpbf.optimize(
         "build_rate": "maximize"
     }
 )
+
+## 🏗️ Development & SDLC
+
+This project implements a comprehensive Software Development Life Cycle (SDLC) with enterprise-grade practices:
+
+### Quick Development Setup
+
+```bash
+# Clone repository
+git clone https://github.com/danieleschmidt/microdiff-matdesign
+cd microdiff-matdesign
+
+# Setup development environment (recommended)
+docker-compose -f docker-compose.dev.yml up -d
+
+# Or install locally
+pip install -e ".[dev]"
+pre-commit install
+
+# Run tests
+pytest tests/
+
+# Run quality checks
+make lint
+make security-check
+```
+
+### Key SDLC Features
+
+- **🧪 Comprehensive Testing**: Unit, integration, and E2E tests with 85%+ coverage target
+- **🔒 Security-First**: Multi-layer security scanning (SAST, SCA, container, IaC, DAST)
+- **📊 Quality Monitoring**: Automated code quality tracking with trend analysis
+- **🚀 CI/CD Pipeline**: Automated testing, building, and deployment with blue-green strategy
+- **📈 Observability**: Prometheus metrics, Grafana dashboards, and structured logging
+- **🤖 Automation**: Dependency updates, repository maintenance, and metrics collection
+- **📚 Documentation**: Architecture decisions, runbooks, and API documentation
+
+### Repository Structure
+
+```
+microdiff-matdesign/
+├── microdiff_matdesign/     # Core application code
+├── tests/                   # Comprehensive test suite
+├── docs/                    # Documentation and guides
+├── scripts/                 # Automation and utility scripts
+├── config/                  # Configuration files
+├── .github/                 # GitHub workflows and templates
+└── docker-compose*.yml     # Container orchestration
+```
+
+### Development Workflow
+
+1. **Create Feature Branch**: `git checkout -b feature/your-feature`
+2. **Develop with Quality Gates**: Pre-commit hooks ensure code quality
+3. **Test Thoroughly**: Run full test suite before pushing
+4. **Create Pull Request**: Automated CI/CD pipeline validates changes
+5. **Code Review**: Required reviews from code owners
+6. **Deploy**: Automated deployment to staging, then production
+
+### Documentation
+
+- **[Architecture Guide](docs/ARCHITECTURE.md)**: System design and components
+- **[Contributing Guide](CONTRIBUTING.md)**: Development guidelines and standards
+- **[Setup Guide](docs/SETUP_REQUIRED.md)**: Manual setup requirements
+- **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)**: Complete SDLC overview
+- **[Monitoring Guide](docs/monitoring/README.md)**: Observability and alerting
+- **[Workflow Documentation](docs/workflows/README.md)**: CI/CD pipeline details
+
+### Getting Help
+
+- **Issues**: Use GitHub issues with appropriate labels
+- **Security**: Follow [security policy](SECURITY.md) for reporting vulnerabilities
+- **Discussions**: Join GitHub Discussions for questions and ideas
+- **Contributing**: See [contributing guidelines](CONTRIBUTING.md) for getting started
