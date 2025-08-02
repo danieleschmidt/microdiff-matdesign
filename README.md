@@ -1,6 +1,14 @@
 # MicroDiff-MatDesign
 
+[![CI/CD](https://github.com/danieleschmidt/microdiff-matdesign/workflows/CI/badge.svg)](https://github.com/danieleschmidt/microdiff-matdesign/actions)
+[![Coverage](https://codecov.io/gh/danieleschmidt/microdiff-matdesign/branch/main/graph/badge.svg)](https://codecov.io/gh/danieleschmidt/microdiff-matdesign)
+[![Documentation](https://readthedocs.org/projects/microdiff-matdesign/badge/?version=latest)](https://microdiff-matdesign.readthedocs.io/en/latest/)
+[![PyPI version](https://badge.fury.io/py/microdiff-matdesign.svg)](https://badge.fury.io/py/microdiff-matdesign)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 Diffusion model framework for inverse material design that transforms micro-CT images into printable alloy process parameters. Based on Berkeley's microstructure diffusion paper (April 2025), this tool enables AI-driven optimization of material properties through generative modeling.
+
+> ⚠️ **Enterprise-Ready SDLC Implementation** - This repository includes comprehensive SDLC infrastructure with automated testing, security scanning, monitoring, and deployment pipelines. See [SDLC Documentation](docs/) for details.
 
 ## Overview
 
@@ -280,3 +288,93 @@ optimal_params = lpbf.optimize(
         "build_rate": "maximize"
     }
 )
+
+## SDLC & DevOps Infrastructure
+
+This repository implements enterprise-grade SDLC practices with comprehensive automation:
+
+### 🔄 CI/CD Pipeline
+- **Automated Testing**: Multi-Python version testing (3.8-3.11) with pytest
+- **Code Quality**: Linting (flake8), type checking (mypy), security scanning (bandit)
+- **Coverage**: Automated coverage reporting with 80%+ target
+- **Deployment**: Containerized deployment with Docker and Kubernetes support
+
+### 🛡️ Security & Compliance
+- **Vulnerability Scanning**: Automated security checks with CodeQL and Trivy
+- **Dependency Management**: Automated dependency updates with safety validation
+- **Secrets Management**: Secure handling of API keys and credentials
+- **SLSA Compliance**: Software supply chain security
+
+### 📊 Monitoring & Observability
+- **Health Checks**: Comprehensive application and system health monitoring
+- **Metrics**: Prometheus metrics with Grafana dashboards
+- **Logging**: Structured JSON logging with correlation IDs
+- **Alerting**: Intelligent alerting with runbook automation
+
+### 🚀 Automation Scripts
+- **Metrics Collection**: `./scripts/collect-metrics.py --summary`
+- **Dependency Updates**: `./scripts/automation/dependency-updates.sh`
+- **Code Quality**: `./scripts/automation/code-quality-monitor.py`
+
+### 📋 Documentation
+- **Architecture**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **API Reference**: [docs/guides/](docs/guides/)
+- **Runbooks**: [docs/runbooks/](docs/runbooks/)
+- **ADRs**: [docs/adr/](docs/adr/)
+
+For complete SDLC setup instructions, see [docs/SETUP_REQUIRED.md](docs/SETUP_REQUIRED.md).
+
+## Contributing
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+### Quick Development Setup
+
+```bash
+# Clone and setup development environment
+git clone https://github.com/danieleschmidt/microdiff-matdesign.git
+cd microdiff-matdesign
+
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Run quality checks
+flake8 microdiff_matdesign
+mypy microdiff_matdesign
+bandit -r microdiff_matdesign
+
+# Generate coverage report
+pytest --cov=microdiff_matdesign --cov-report=html
+```
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## Citation
+
+If you use MicroDiff-MatDesign in your research, please cite:
+
+```bibtex
+@software{microdiff_matdesign,
+  title={MicroDiff-MatDesign: Diffusion Models for Inverse Material Design},
+  author={Schmidt, Daniel E.},
+  url={https://github.com/danieleschmidt/microdiff-matdesign},
+  year={2024},
+  license={Apache-2.0}
+}
+```
+
+## Support
+
+- 📖 **Documentation**: [microdiff-matdesign.readthedocs.io](https://microdiff-matdesign.readthedocs.io/)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/danieleschmidt/microdiff-matdesign/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/danieleschmidt/microdiff-matdesign/discussions)
+- 📧 **Email**: [support@microdiff-matdesign.org](mailto:support@microdiff-matdesign.org)
+
+---
+
+**🤖 This repository includes enterprise-ready SDLC implementation with automated testing, security scanning, monitoring, and deployment infrastructure.**

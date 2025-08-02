@@ -1,0 +1,49 @@
+# Global Owners
+* @danieleschmidt
+
+# Core Application Code
+/microdiff_matdesign/ @danieleschmidt @ml-team
+
+# ML Models and Algorithms
+/microdiff_matdesign/models/ @danieleschmidt @ml-team
+/microdiff_matdesign/core.py @danieleschmidt @ml-team
+
+# Image Processing
+/microdiff_matdesign/imaging.py @danieleschmidt @imaging-team
+
+# CLI and User Interface
+/microdiff_matdesign/cli.py @danieleschmidt @ui-team
+
+# Testing
+/tests/ @danieleschmidt @qa-team
+
+# Documentation
+/docs/ @danieleschmidt @docs-team
+*.md @danieleschmidt @docs-team
+
+# Configuration Files
+/pyproject.toml @danieleschmidt @platform-team
+/requirements*.txt @danieleschmidt @platform-team
+/Dockerfile @danieleschmidt @platform-team
+/docker-compose*.yml @danieleschmidt @platform-team
+
+# CI/CD and Automation
+/.github/ @danieleschmidt @platform-team
+/scripts/ @danieleschmidt @platform-team
+
+# Monitoring and Observability
+/docs/monitoring/ @danieleschmidt @platform-team
+/docs/runbooks/ @danieleschmidt @platform-team
+
+# Architecture and ADRs
+/docs/adr/ @danieleschmidt @architecture-team
+/docs/ARCHITECTURE.md @danieleschmidt @architecture-team
+
+# Security
+/SECURITY.md @danieleschmidt @security-team
+/docs/monitoring/alerts.yaml @danieleschmidt @security-team
+
+# Project Management
+/PROJECT_CHARTER.md @danieleschmidt @product-team
+/ROADMAP.md @danieleschmidt @product-team
+/BACKLOG.md @danieleschmidt @product-team

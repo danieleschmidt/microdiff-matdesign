@@ -1,0 +1,300 @@
+{
+  "project": {
+    "name": "MicroDiff-MatDesign",
+    "version": "1.0.0",
+    "description": "Diffusion model framework for inverse material design",
+    "repository": "danieleschmidt/microdiff-matdesign",
+    "last_updated": "2024-08-02T00:00:00Z"
+  },
+  
+  "metrics": {
+    
+    "development": {
+      "commits": {
+        "total": 0,
+        "last_month": 0,
+        "avg_per_week": 0,
+        "contributors": []
+      },
+      "pull_requests": {
+        "total": 0,
+        "open": 0,
+        "merged": 0,
+        "closed": 0,
+        "avg_time_to_merge_hours": 0
+      },
+      "issues": {
+        "total": 0,
+        "open": 0,
+        "closed": 0,
+        "avg_time_to_close_hours": 0,
+        "labels": {
+          "bug": 0,
+          "enhancement": 0,
+          "documentation": 0,
+          "question": 0
+        }
+      },
+      "branches": {
+        "total": 0,
+        "active": 0,
+        "stale": 0
+      },
+      "releases": {
+        "total": 0,
+        "latest": null,
+        "avg_time_between_releases_days": 0
+      }
+    },
+    
+    "code_quality": {
+      "lines_of_code": {
+        "total": 0,
+        "python": 0,
+        "yaml": 0,
+        "markdown": 0,
+        "dockerfile": 0
+      },
+      "test_coverage": {
+        "percentage": 0,
+        "lines_covered": 0,
+        "lines_total": 0,
+        "missing_coverage": []
+      },
+      "complexity": {
+        "cyclomatic_complexity": 0,
+        "maintainability_index": 0,
+        "functions_over_threshold": 0
+      },
+      "code_duplication": {
+        "percentage": 0,
+        "duplicated_lines": 0,
+        "duplicated_blocks": 0
+      },
+      "security": {
+        "vulnerabilities": {
+          "critical": 0,
+          "high": 0,
+          "medium": 0,
+          "low": 0
+        },
+        "last_scan_date": null,
+        "security_score": 0
+      },
+      "dependencies": {
+        "total": 0,
+        "outdated": 0,
+        "security_issues": 0,
+        "licenses": {}
+      }
+    },
+    
+    "ci_cd": {
+      "builds": {
+        "total": 0,
+        "successful": 0,
+        "failed": 0,
+        "success_rate": 0,
+        "avg_duration_minutes": 0
+      },
+      "deployments": {
+        "total": 0,
+        "successful": 0,
+        "failed": 0,
+        "rollbacks": 0,
+        "avg_duration_minutes": 0
+      },
+      "tests": {
+        "total_runs": 0,
+        "total_tests": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "avg_execution_time_seconds": 0
+      },
+      "pipeline_efficiency": {
+        "parallel_execution_rate": 0,
+        "cache_hit_rate": 0,
+        "artifact_reuse_rate": 0
+      }
+    },
+    
+    "performance": {
+      "application": {
+        "response_time_p95_ms": 0,
+        "throughput_requests_per_second": 0,
+        "error_rate_percentage": 0,
+        "uptime_percentage": 0
+      },
+      "infrastructure": {
+        "cpu_usage_avg_percentage": 0,
+        "memory_usage_avg_percentage": 0,
+        "disk_usage_percentage": 0,
+        "network_throughput_mbps": 0
+      },
+      "ml_models": {
+        "inference_time_p95_ms": 0,
+        "model_accuracy": 0,
+        "memory_usage_mb": 0,
+        "gpu_utilization_percentage": 0
+      }
+    },
+    
+    "community": {
+      "github": {
+        "stars": 0,
+        "forks": 0,
+        "watchers": 0,
+        "contributors": 0,
+        "community_score": 0
+      },
+      "documentation": {
+        "pages": 0,
+        "word_count": 0,
+        "last_updated": null,
+        "completeness_score": 0
+      },
+      "user_engagement": {
+        "active_users_monthly": 0,
+        "feature_requests": 0,
+        "support_tickets": 0,
+        "avg_response_time_hours": 0
+      }
+    },
+    
+    "business": {
+      "adoption": {
+        "installations": 0,
+        "active_users": 0,
+        "retention_rate_percentage": 0,
+        "growth_rate_monthly": 0
+      },
+      "usage": {
+        "api_calls_daily": 0,
+        "designs_generated_daily": 0,
+        "data_processed_gb_daily": 0,
+        "feature_usage": {}
+      },
+      "research_impact": {
+        "publications_citing": 0,
+        "academic_collaborations": 0,
+        "industry_partnerships": 0,
+        "open_datasets_created": 0
+      }
+    }
+  },
+  
+  "targets": {
+    "development": {
+      "commits_per_month": 50,
+      "pr_merge_time_hours": 24,
+      "issue_resolution_time_hours": 72,
+      "contributor_growth_monthly": 2
+    },
+    "code_quality": {
+      "test_coverage_percentage": 80,
+      "cyclomatic_complexity_max": 10,
+      "security_score_min": 8,
+      "vulnerability_count_max": 0
+    },
+    "ci_cd": {
+      "build_success_rate": 95,
+      "deployment_success_rate": 98,
+      "test_pass_rate": 98,
+      "pipeline_duration_minutes_max": 15
+    },
+    "performance": {
+      "response_time_p95_ms_max": 2000,
+      "error_rate_percentage_max": 1,
+      "uptime_percentage_min": 99.9,
+      "inference_time_p95_ms_max": 10000
+    },
+    "community": {
+      "github_stars": 100,
+      "contributors": 10,
+      "documentation_completeness": 90,
+      "community_score": 8
+    },
+    "business": {
+      "active_users": 1000,
+      "retention_rate_percentage": 80,
+      "api_calls_daily": 10000,
+      "research_collaborations": 5
+    }
+  },
+  
+  "tracking": {
+    "collection_frequency": "daily",
+    "last_collection": null,
+    "automated_reports": {
+      "daily": true,
+      "weekly": true,
+      "monthly": true,
+      "quarterly": true
+    },
+    "data_retention_days": 365,
+    "export_formats": ["json", "csv", "prometheus"]
+  },
+  
+  "integrations": {
+    "github_api": {
+      "enabled": true,
+      "token_required": true,
+      "rate_limit": 5000
+    },
+    "codecov": {
+      "enabled": false,
+      "token_required": true
+    },
+    "sonarqube": {
+      "enabled": false,
+      "url": null
+    },
+    "prometheus": {
+      "enabled": true,
+      "endpoint": "/metrics"
+    },
+    "grafana": {
+      "enabled": true,
+      "dashboard_id": null
+    }
+  },
+  
+  "alerts": {
+    "thresholds": {
+      "test_coverage_below": 70,
+      "build_success_rate_below": 90,
+      "response_time_above_ms": 5000,
+      "error_rate_above": 5,
+      "security_vulnerabilities_above": 0
+    },
+    "notification_channels": {
+      "slack": {
+        "enabled": false,
+        "webhook_url": null,
+        "channel": "#metrics"
+      },
+      "email": {
+        "enabled": false,
+        "recipients": []
+      }
+    }
+  },
+  
+  "benchmarks": {
+    "industry_standards": {
+      "test_coverage": 80,
+      "deployment_frequency": "daily",
+      "lead_time_hours": 24,
+      "mttr_hours": 1,
+      "change_failure_rate": 15
+    },
+    "similar_projects": {
+      "open_source_ml": {
+        "github_stars_median": 500,
+        "contributors_median": 15,
+        "commit_frequency_monthly": 30
+      }
+    }
+  }
+}
