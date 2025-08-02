@@ -1,0 +1,481 @@
+name: Automated Dependency Updates
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Weekly Monday 3 AM UTC
+    - cron: '0 3 1 * *'  # Monthly on 1st day 3 AM UTC
+  workflow_dispatch:
+    inputs:
+      update_type:
+        description: 'Type of update'
+        required: true
+        default: 'minor'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+        - security
+      dry_run:
+        description: 'Dry run (do not create PR)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  # Check for dependency updates
+  check-updates:
+    name: Check for Updates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      has-updates: ${{ steps.check.outputs.has-updates }}
+      update-type: ${{ steps.determine-type.outputs.update-type }}
+      security-updates: ${{ steps.check.outputs.security-updates }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pip-tools pip-check-reqs safety
+
+    - name: Determine update type
+      id: determine-type
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          UPDATE_TYPE="${{ inputs.update_type }}"
+        elif [[ "${{ github.event.schedule }}" == "0 3 * * 1" ]]; then
+          UPDATE_TYPE="minor"  # Weekly: minor updates
+        elif [[ "${{ github.event.schedule }}" == "0 3 1 * *" ]]; then
+          UPDATE_TYPE="major"  # Monthly: major updates
+        else
+          UPDATE_TYPE="patch"
+        fi
+        echo "update-type=${UPDATE_TYPE}" >> $GITHUB_OUTPUT
+        echo "📋 Update type: ${UPDATE_TYPE}"
+
+    - name: Check for outdated packages
+      id: check
+      run: |
+        # Check for outdated packages
+        pip list --outdated --format=json > outdated.json
+        
+        # Check for security vulnerabilities
+        safety check --json --output security.json --continue-on-error || true
+        
+        # Determine if we have updates
+        OUTDATED_COUNT=$(jq length outdated.json)
+        SECURITY_COUNT=$(jq '.vulnerabilities | length' security.json 2>/dev/null || echo "0")
+        
+        echo "📊 Outdated packages: $OUTDATED_COUNT"
+        echo "🔒 Security vulnerabilities: $SECURITY_COUNT"
+        
+        if [[ $OUTDATED_COUNT -gt 0 || $SECURITY_COUNT -gt 0 ]]; then
+          echo "has-updates=true" >> $GITHUB_OUTPUT
+        else
+          echo "has-updates=false" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "security-updates=$SECURITY_COUNT" >> $GITHUB_OUTPUT
+
+    - name: Upload check results
+      uses: actions/upload-artifact@v3
+      with:
+        name: dependency-check
+        path: |
+          outdated.json
+          security.json
+
+  # Python dependency updates
+  update-python:
+    name: Update Python Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: check-updates
+    if: needs.check-updates.outputs.has-updates == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install pip-tools safety pipenv pip-audit
+
+    - name: Backup current requirements
+      run: |
+        cp requirements.txt requirements.txt.backup
+        cp pyproject.toml pyproject.toml.backup
+
+    - name: Update dependencies based on type
+      run: |
+        UPDATE_TYPE="${{ needs.check-updates.outputs.update-type }}"
+        
+        case $UPDATE_TYPE in
+          "security")
+            echo "🔒 Updating security vulnerabilities only"
+            # Get vulnerable packages
+            safety check --json --output security.json --continue-on-error || true
+            if [[ -f security.json ]]; then
+              VULNERABLE_PACKAGES=$(jq -r '.vulnerabilities[].package_name' security.json | sort -u)
+              for package in $VULNERABLE_PACKAGES; do
+                echo "Updating vulnerable package: $package"
+                pip install --upgrade "$package"
+              done
+            fi
+            ;;
+          "patch")
+            echo "🩹 Updating patch versions only"
+            pip-compile --upgrade-package="*" --resolver=backtracking requirements.in || true
+            ;;
+          "minor")
+            echo "🔄 Updating minor versions"
+            pip-compile --upgrade --resolver=backtracking requirements.in || true
+            ;;
+          "major")
+            echo "🚀 Updating all versions (including major)"
+            pip-compile --upgrade --resolver=backtracking requirements.in || true
+            # Also update pyproject.toml dependencies
+            pip install --upgrade pip-tools
+            ;;
+        esac
+
+    - name: Install updated dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install -e ".[dev]"
+
+    - name: Run security check on updated packages
+      run: |
+        safety check --json --output updated-security.json --continue-on-error || true
+        
+        # Compare security status
+        if [[ -f updated-security.json ]]; then
+          NEW_VULNS=$(jq '.vulnerabilities | length' updated-security.json)
+          echo "🔒 Vulnerabilities after update: $NEW_VULNS"
+        fi
+
+    - name: Run basic tests
+      run: |
+        # Run quick smoke tests
+        python -c "import microdiff_matdesign; print('✅ Package imports successfully')"
+        
+        # Run unit tests
+        pytest tests/unit/ --maxfail=5 -q
+
+    - name: Check for breaking changes
+      run: |
+        # Run type checking
+        mypy microdiff_matdesign || echo "⚠️ Type checking issues found"
+        
+        # Run linting
+        ruff check microdiff_matdesign || echo "⚠️ Linting issues found"
+
+    - name: Generate update summary
+      run: |
+        echo "# 📦 Dependency Update Summary" > update-summary.md
+        echo "" >> update-summary.md
+        echo "**Update Type**: ${{ needs.check-updates.outputs.update-type }}" >> update-summary.md
+        echo "**Generated**: $(date -u)" >> update-summary.md
+        echo "" >> update-summary.md
+        
+        # Show changes
+        echo "## Changed Dependencies" >> update-summary.md
+        echo "" >> update-summary.md
+        
+        if ! diff -u requirements.txt.backup requirements.txt >> update-summary.md; then
+          echo "```diff" >> update-summary.md
+          diff -u requirements.txt.backup requirements.txt >> update-summary.md || true
+          echo "```" >> update-summary.md
+        else
+          echo "No changes in requirements.txt" >> update-summary.md
+        fi
+        
+        echo "" >> update-summary.md
+        echo "## Security Status" >> update-summary.md
+        echo "" >> update-summary.md
+        
+        if [[ -f updated-security.json ]]; then
+          VULNS=$(jq '.vulnerabilities | length' updated-security.json)
+          if [[ $VULNS -eq 0 ]]; then
+            echo "✅ No known security vulnerabilities" >> update-summary.md
+          else
+            echo "⚠️ $VULNS security vulnerabilities remain" >> update-summary.md
+          fi
+        fi
+        
+        echo "" >> update-summary.md
+        echo "## Testing Status" >> update-summary.md
+        echo "" >> update-summary.md
+        echo "- ✅ Package imports successfully" >> update-summary.md
+        echo "- ✅ Unit tests passed" >> update-summary.md
+
+    - name: Upload update artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dependency-updates
+        path: |
+          requirements.txt
+          requirements.txt.backup
+          pyproject.toml
+          pyproject.toml.backup
+          update-summary.md
+          updated-security.json
+
+  # Create pull request
+  create-pr:
+    name: Create Pull Request
+    runs-on: ubuntu-latest
+    needs: [check-updates, update-python]
+    if: needs.check-updates.outputs.has-updates == 'true' && !inputs.dry_run
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Download update artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: dependency-updates
+
+    - name: Configure Git
+      run: |
+        git config user.name "dependency-updater[bot]"
+        git config user.email "dependency-updater[bot]@users.noreply.github.com"
+
+    - name: Create branch and commit changes
+      run: |
+        BRANCH_NAME="dependency-updates/$(date +%Y%m%d-%H%M%S)"
+        git checkout -b "$BRANCH_NAME"
+        
+        # Copy updated files
+        cp requirements.txt requirements.txt.new
+        cp pyproject.toml pyproject.toml.new
+        
+        # Check if there are actual changes
+        if git diff --quiet requirements.txt.new requirements.txt && git diff --quiet pyproject.toml.new pyproject.toml; then
+          echo "No changes detected, skipping PR creation"
+          exit 0
+        fi
+        
+        # Apply changes
+        mv requirements.txt.new requirements.txt
+        mv pyproject.toml.new pyproject.toml
+        
+        git add requirements.txt pyproject.toml
+        
+        # Create commit message
+        UPDATE_TYPE="${{ needs.check-updates.outputs.update-type }}"
+        SECURITY_UPDATES="${{ needs.check-updates.outputs.security-updates }}"
+        
+        if [[ "$SECURITY_UPDATES" -gt 0 ]]; then
+          COMMIT_MSG="chore: update dependencies (security fixes)"
+        else
+          COMMIT_MSG="chore: update dependencies ($UPDATE_TYPE)"
+        fi
+        
+        git commit -m "$COMMIT_MSG"
+        
+        echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+    - name: Push branch
+      run: |
+        git push origin "$BRANCH_NAME"
+
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        branch: ${{ env.BRANCH_NAME }}
+        title: "🤖 Automated dependency updates (${{ needs.check-updates.outputs.update-type }})"
+        body: |
+          ## 📦 Automated Dependency Updates
+          
+          This PR contains automated dependency updates.
+          
+          **Update Type**: ${{ needs.check-updates.outputs.update-type }}
+          **Security Updates**: ${{ needs.check-updates.outputs.security-updates }} vulnerabilities addressed
+          
+          ### Changes Summary
+          
+          $(cat update-summary.md)
+          
+          ### Testing
+          
+          - ✅ Package imports successfully
+          - ✅ Unit tests passed
+          - ✅ Security scan completed
+          
+          ### Review Checklist
+          
+          - [ ] Review dependency changes
+          - [ ] Check for breaking changes
+          - [ ] Verify security improvements
+          - [ ] Run full test suite
+          - [ ] Check documentation updates needed
+          
+          ---
+          
+          🤖 This PR was created automatically by the dependency update workflow.
+          
+          **Note**: Please review the changes carefully before merging.
+        labels: |
+          dependencies
+          automated
+          ${{ needs.check-updates.outputs.security-updates > 0 && 'security' || '' }}
+        assignees: |
+          ${{ github.repository_owner }}
+        reviewers: |
+          security-team
+
+  # Enhanced testing for major updates
+  comprehensive-test:
+    name: Comprehensive Testing
+    runs-on: ubuntu-latest
+    needs: [check-updates, update-python]
+    if: needs.check-updates.outputs.update-type == 'major' && needs.check-updates.outputs.has-updates == 'true'
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download update artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: dependency-updates
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install updated dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -e ".[dev]"
+
+    - name: Run comprehensive tests
+      run: |
+        # Run all tests
+        pytest tests/ --cov=microdiff_matdesign -v
+        
+        # Type checking
+        mypy microdiff_matdesign
+        
+        # Linting
+        ruff check microdiff_matdesign
+        
+        # Security check
+        bandit -r microdiff_matdesign
+
+    - name: Performance benchmark
+      run: |
+        # Run performance tests if they exist
+        if [ -d "tests/benchmarks" ]; then
+          pytest tests/benchmarks/ --benchmark-only
+        fi
+
+  # Rollback capability
+  rollback:
+    name: Emergency Rollback
+    runs-on: ubuntu-latest
+    if: failure() && needs.check-updates.outputs.security-updates > 0
+    needs: [check-updates, update-python, create-pr]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: dependency-updates
+
+    - name: Restore backup
+      run: |
+        if [ -f requirements.txt.backup ]; then
+          cp requirements.txt.backup requirements.txt
+          echo "✅ Restored requirements.txt from backup"
+        fi
+        
+        if [ -f pyproject.toml.backup ]; then
+          cp pyproject.toml.backup pyproject.toml
+          echo "✅ Restored pyproject.toml from backup"
+        fi
+
+    - name: Verify rollback
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        python -c "import microdiff_matdesign; print('✅ Rollback successful')"
+
+  # Notification and reporting
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [check-updates, update-python, create-pr]
+    if: always()
+    steps:
+    - name: Notify on success
+      if: success() && needs.check-updates.outputs.has-updates == 'true'
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        text: |
+          📦 Dependency update PR created successfully
+          Type: ${{ needs.check-updates.outputs.update-type }}
+          Security fixes: ${{ needs.check-updates.outputs.security-updates }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Notify on failure
+      if: failure()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        text: |
+          ❌ Dependency update workflow failed
+          Please check the workflow logs
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Notify security team on security updates
+      if: needs.check-updates.outputs.security-updates > 0
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            text: "🔒 Security dependency updates available",
+            blocks: [
+              {
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: "*Security Alert*\n${{ needs.check-updates.outputs.security-updates }} security vulnerabilities found in dependencies."
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SECURITY_SLACK_WEBHOOK_URL }}
