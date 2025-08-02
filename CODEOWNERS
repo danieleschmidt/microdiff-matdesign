@@ -1,0 +1,68 @@
+# CODEOWNERS file for MicroDiff-MatDesign
+# This file defines who is responsible for code in different parts of the repository.
+# Order matters; later matches take precedence.
+
+# Global fallback - repository maintainers
+* @danieleschmidt
+
+# Core application code
+microdiff_matdesign/ @danieleschmidt
+microdiff_matdesign/core.py @danieleschmidt @ml-team
+microdiff_matdesign/models/ @danieleschmidt @ml-team
+microdiff_matdesign/imaging/ @danieleschmidt @ml-team
+
+# Infrastructure and DevOps
+Dockerfile @danieleschmidt @devops-team
+docker-compose*.yml @danieleschmidt @devops-team
+Makefile @danieleschmidt @devops-team
+.github/ @danieleschmidt @devops-team
+config/ @danieleschmidt @devops-team
+
+# CI/CD and workflows
+.github/workflows/ @danieleschmidt @devops-team
+docs/workflows/ @danieleschmidt @devops-team
+
+# Monitoring and observability
+docs/monitoring/ @danieleschmidt @devops-team @sre-team
+docs/runbooks/ @danieleschmidt @devops-team @sre-team
+microdiff_matdesign/monitoring.py @danieleschmidt @devops-team @sre-team
+
+# Testing
+tests/ @danieleschmidt @qa-team
+pytest.ini @danieleschmidt @qa-team
+tox.ini @danieleschmidt @qa-team
+
+# Documentation
+docs/ @danieleschmidt @docs-team
+README.md @danieleschmidt @docs-team
+CONTRIBUTING.md @danieleschmidt @docs-team
+
+# Security and compliance
+SECURITY.md @danieleschmidt @security-team
+docs/security/ @danieleschmidt @security-team
+
+# Dependencies and package management
+requirements.txt @danieleschmidt @devops-team
+pyproject.toml @danieleschmidt @devops-team
+setup.py @danieleschmidt @devops-team
+
+# Automation scripts
+scripts/ @danieleschmidt @devops-team
+scripts/automation/ @danieleschmidt @devops-team
+
+# Configuration files
+*.yml @danieleschmidt @devops-team
+*.yaml @danieleschmidt @devops-team
+*.json @danieleschmidt @devops-team
+
+# Architecture decisions
+docs/adr/ @danieleschmidt @architecture-team
+
+# Project management
+PROJECT_CHARTER.md @danieleschmidt @project-managers
+ROADMAP.md @danieleschmidt @project-managers
+BACKLOG.md @danieleschmidt @project-managers
+
+# Legal and compliance
+LICENSE @danieleschmidt @legal-team
+CODE_OF_CONDUCT.md @danieleschmidt @legal-team
