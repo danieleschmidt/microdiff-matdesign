@@ -1,0 +1,485 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly Monday 2 AM UTC
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of security scan'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+        - full
+        - code-only
+        - dependencies-only
+        - container-only
+
+env:
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  # Static Application Security Testing (SAST)
+  sast:
+    name: Static Code Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: inputs.scan_type == 'full' || inputs.scan_type == 'code-only' || github.event_name != 'workflow_dispatch'
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+
+    # CodeQL Analysis
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: python
+        queries: security-extended,security-and-quality
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v2
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:python"
+
+    # Bandit Security Linter
+    - name: Run Bandit security linter
+      run: |
+        bandit -r microdiff_matdesign \
+          -f json \
+          -o bandit-report.json \
+          --severity-level medium \
+          --confidence-level medium
+
+    - name: Upload Bandit results
+      uses: actions/upload-artifact@v3
+      with:
+        name: bandit-results
+        path: bandit-report.json
+
+    # Semgrep Static Analysis
+    - name: Semgrep security scan
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: >-
+          p/security-audit
+          p/python
+          p/owasp-top-ten
+          p/cwe-top-25
+        generateSarif: "1"
+
+    # Secret Detection
+    - name: Run secret detection
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+
+    # Custom security rules
+    - name: Custom security checks
+      run: |
+        # Check for hardcoded secrets
+        echo "🔍 Checking for potential secrets..."
+        if grep -r -E "(password|secret|key|token)\s*=\s*['\"][^'\"]{8,}" --include="*.py" microdiff_matdesign/; then
+          echo "❌ Potential hardcoded secrets found"
+          exit 1
+        fi
+        
+        # Check for SQL injection vulnerabilities
+        echo "🔍 Checking for SQL injection patterns..."
+        if grep -r -E "execute\s*\(\s*['\"].*%.*['\"]" --include="*.py" microdiff_matdesign/; then
+          echo "⚠️ Potential SQL injection vulnerability found"
+        fi
+        
+        # Check for path traversal vulnerabilities
+        echo "🔍 Checking for path traversal patterns..."
+        if grep -r -E "open\s*\(\s*.*\+.*['\"]" --include="*.py" microdiff_matdesign/; then
+          echo "⚠️ Potential path traversal vulnerability found"
+        fi
+
+  # Software Composition Analysis (SCA)
+  dependency-scan:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: inputs.scan_type == 'full' || inputs.scan_type == 'dependencies-only' || github.event_name != 'workflow_dispatch'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+
+    # Safety - check for known vulnerabilities
+    - name: Safety check for known vulnerabilities
+      run: |
+        safety check \
+          --json \
+          --output safety-report.json \
+          --continue-on-error
+        
+        # Also run with DB update
+        safety check --db
+
+    # Pip-audit for dependency vulnerabilities
+    - name: Audit Python dependencies
+      uses: pypa/gh-action-pip-audit@v1.0.8
+      with:
+        inputs: requirements.txt pyproject.toml
+        format: json
+        output: pip-audit-report.json
+
+    # Snyk vulnerability scanning
+    - name: Run Snyk to check for vulnerabilities
+      uses: snyk/actions/python@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=medium --json-file-output=snyk-report.json
+
+    # License compliance check
+    - name: Check license compliance
+      run: |
+        pip install pip-licenses
+        
+        # Generate license report
+        pip-licenses --format=json --output-file=licenses.json
+        
+        # Check for prohibited licenses
+        pip-licenses --fail-on="GPL;AGPL;LGPL" --quiet
+
+    # Upload dependency scan results
+    - name: Upload dependency scan results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: dependency-scan-results
+        path: |
+          safety-report.json
+          pip-audit-report.json
+          snyk-report.json
+          licenses.json
+
+  # Container Security Scanning
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: inputs.scan_type == 'full' || inputs.scan_type == 'container-only' || github.event_name != 'workflow_dispatch'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build test image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: false
+        tags: microdiff-test:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    # Trivy vulnerability scanner
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'microdiff-test:latest'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    # Anchore Grype vulnerability scanner
+    - name: Run Anchore Grype vulnerability scanner
+      uses: anchore/scan-action@v3
+      id: grype-scan
+      with:
+        image: "microdiff-test:latest"
+        fail-build: false
+        severity-cutoff: medium
+        output-format: json
+        output-file: grype-results.json
+
+    # Docker Scout security scan
+    - name: Docker Scout scan
+      uses: docker/scout-action@v1
+      with:
+        command: cves
+        image: microdiff-test:latest
+        format: json
+        output: scout-results.json
+
+    # Hadolint Dockerfile linting
+    - name: Hadolint Dockerfile linting
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: Dockerfile
+        format: json
+        output-file: hadolint-results.json
+        no-fail: true
+
+    # Container best practices check
+    - name: Container security best practices
+      run: |
+        echo "🔍 Checking container security best practices..."
+        
+        # Check if running as non-root
+        if docker run --rm microdiff-test:latest id | grep -q "uid=0"; then
+          echo "⚠️ Container is running as root user"
+        else
+          echo "✅ Container is running as non-root user"
+        fi
+        
+        # Check for unnecessary packages
+        docker run --rm microdiff-test:latest sh -c "
+          if command -v apt &> /dev/null; then
+            echo '🔍 Checking for development packages...'
+            apt list --installed | grep -E '(gcc|g\+\+|make|cmake)' || echo '✅ No development packages found'
+          fi
+        "
+
+    # Upload container scan results
+    - name: Upload container scan results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: container-scan-results
+        path: |
+          trivy-results.sarif
+          grype-results.json
+          scout-results.json
+          hadolint-results.json
+
+  # Infrastructure as Code Security
+  iac-scan:
+    name: Infrastructure Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: inputs.scan_type == 'full' || github.event_name != 'workflow_dispatch'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Checkov IaC security scanner
+    - name: Checkov IaC security scan
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: .
+        framework: kubernetes,dockerfile,github_actions
+        output_format: json
+        output_file_path: checkov-results.json
+        download_external_modules: true
+
+    # Terrascan for IaC security
+    - name: Terrascan IaC scanner
+      uses: tenable/terrascan-action@main
+      with:
+        iac_type: 'docker'
+        iac_version: 'v1'
+        policy_type: 'docker'
+        only_warn: true
+        output_format: 'json'
+        output_file: 'terrascan-results.json'
+
+    # Custom IaC checks
+    - name: Custom IaC security checks
+      run: |
+        echo "🔍 Checking Kubernetes manifests..."
+        
+        # Check for security contexts
+        if find . -name "*.yaml" -o -name "*.yml" | xargs grep -l "kind: Pod\|kind: Deployment" | xargs grep -L "securityContext"; then
+          echo "⚠️ Some Kubernetes manifests missing securityContext"
+        fi
+        
+        # Check for resource limits
+        if find . -name "*.yaml" -o -name "*.yml" | xargs grep -l "kind: Pod\|kind: Deployment" | xargs grep -L "resources:"; then
+          echo "⚠️ Some Kubernetes manifests missing resource limits"
+        fi
+
+    - name: Upload IaC scan results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: iac-scan-results
+        path: |
+          checkov-results.json
+          terrascan-results.json
+
+  # Dynamic Application Security Testing (DAST)
+  dast:
+    name: Dynamic Security Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'schedule' || inputs.scan_type == 'full'
+    services:
+      app:
+        image: microdiff-matdesign:latest
+        ports:
+          - 8080:8080
+        options: --health-cmd="curl -f http://localhost:8080/health" --health-interval=10s --health-timeout=5s --health-retries=3
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Wait for application to be ready
+      run: |
+        for i in {1..30}; do
+          if curl -f http://localhost:8080/health; then
+            echo "✅ Application is ready"
+            break
+          fi
+          echo "⏳ Waiting for application to be ready... ($i/30)"
+          sleep 10
+        done
+
+    # OWASP ZAP Dynamic Security Scan
+    - name: ZAP Baseline Scan
+      uses: zaproxy/action-baseline@v0.7.0
+      with:
+        target: 'http://localhost:8080'
+        rules_file_name: '.zap/rules.tsv'
+        cmd_options: '-a -j'
+
+    - name: ZAP Full Scan
+      uses: zaproxy/action-full-scan@v0.4.0
+      with:
+        target: 'http://localhost:8080'
+        rules_file_name: '.zap/rules.tsv'
+        cmd_options: '-a -j'
+
+    # Upload DAST results
+    - name: Upload ZAP results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: zap-results
+        path: |
+          report_html.html
+          report_json.json
+
+  # Security report aggregation
+  security-report:
+    name: Security Report
+    runs-on: ubuntu-latest
+    needs: [sast, dependency-scan, container-scan, iac-scan]
+    if: always()
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Generate security summary
+      run: |
+        echo "# 🔒 Security Scan Summary" >> security-summary.md
+        echo "" >> security-summary.md
+        echo "Generated: $(date -u)" >> security-summary.md
+        echo "" >> security-summary.md
+        
+        echo "## Scan Results" >> security-summary.md
+        echo "" >> security-summary.md
+        
+        # Check each scan result
+        if [ -f "bandit-results/bandit-report.json" ]; then
+          BANDIT_ISSUES=$(jq '.results | length' bandit-results/bandit-report.json 2>/dev/null || echo "unknown")
+          echo "- **Static Code Analysis (Bandit)**: $BANDIT_ISSUES issues found" >> security-summary.md
+        fi
+        
+        if [ -f "dependency-scan-results/safety-report.json" ]; then
+          echo "- **Dependency Scan**: Completed" >> security-summary.md
+        fi
+        
+        if [ -f "container-scan-results/trivy-results.sarif" ]; then
+          echo "- **Container Scan**: Completed" >> security-summary.md
+        fi
+        
+        if [ -f "iac-scan-results/checkov-results.json" ]; then
+          echo "- **Infrastructure Scan**: Completed" >> security-summary.md
+        fi
+        
+        echo "" >> security-summary.md
+        echo "## Recommendations" >> security-summary.md
+        echo "" >> security-summary.md
+        echo "1. Review all identified vulnerabilities" >> security-summary.md
+        echo "2. Update dependencies with known vulnerabilities" >> security-summary.md
+        echo "3. Follow security best practices for container deployment" >> security-summary.md
+        echo "4. Implement additional security controls as needed" >> security-summary.md
+
+    - name: Upload security summary
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-summary
+        path: security-summary.md
+
+    - name: Comment on PR with security summary
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const summary = fs.readFileSync('security-summary.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: summary
+          });
+
+  # Security notification
+  notify:
+    name: Security Notification
+    runs-on: ubuntu-latest
+    needs: [security-report]
+    if: always() && (github.event_name == 'schedule' || contains(needs.*.result, 'failure'))
+    steps:
+    - name: Notify security team
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: |
+          🔒 Security scan completed
+          Repository: ${{ github.repository }}
+          Trigger: ${{ github.event_name }}
+          Results: Check artifacts for detailed reports
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SECURITY_SLACK_WEBHOOK_URL }}

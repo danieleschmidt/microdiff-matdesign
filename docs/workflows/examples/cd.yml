@@ -1,0 +1,448 @@
+name: Continuous Deployment
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      force_deploy:
+        description: 'Force deployment (skip checks)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Determine deployment parameters
+  setup:
+    name: Setup Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.config.outputs.environment }}
+      version: ${{ steps.config.outputs.version }}
+      deploy: ${{ steps.config.outputs.deploy }}
+      image-tag: ${{ steps.config.outputs.image-tag }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure deployment
+      id: config
+      run: |
+        # Determine environment
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          ENVIRONMENT="${{ inputs.environment }}"
+        elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          ENVIRONMENT="staging"
+        elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          ENVIRONMENT="production"
+        else
+          ENVIRONMENT="none"
+        fi
+        
+        # Determine version
+        if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          VERSION="${{ github.ref_name }}"
+        else
+          VERSION="main-${{ github.sha }}"
+        fi
+        
+        # Determine if we should deploy
+        DEPLOY="true"
+        if [[ "$ENVIRONMENT" == "none" ]]; then
+          DEPLOY="false"
+        fi
+        
+        # Image tag
+        IMAGE_TAG="${REGISTRY}/${IMAGE_NAME}:${VERSION}"
+        
+        echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "deploy=${DEPLOY}" >> $GITHUB_OUTPUT
+        echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+        
+        echo "🚀 Deployment Configuration:"
+        echo "  Environment: ${ENVIRONMENT}"
+        echo "  Version: ${VERSION}"
+        echo "  Deploy: ${DEPLOY}"
+        echo "  Image: ${IMAGE_TAG}"
+
+  # Build and push container image
+  build:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.deploy == 'true'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+
+    - name: Build and push image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: |
+          ${{ needs.setup.outputs.image-tag }}
+          ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+    - name: Generate SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ needs.setup.outputs.image-tag }}
+        format: spdx-json
+        output-file: sbom.spdx.json
+
+    - name: Scan image for vulnerabilities
+      uses: anchore/scan-action@v3
+      with:
+        image: ${{ needs.setup.outputs.image-tag }}
+        fail-build: true
+        severity-cutoff: high
+
+    - name: Sign image with cosign
+      uses: sigstore/cosign-installer@v3
+
+    - name: Sign container image
+      run: |
+        cosign sign --yes ${{ needs.setup.outputs.image-tag }}@${{ steps.build.outputs.digest }}
+
+  # Deploy to staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [setup, build]
+    if: needs.setup.outputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging.microdiff.example.com
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Pre-deployment checks
+      run: |
+        # Check cluster connectivity
+        kubectl cluster-info
+        
+        # Check current deployment status
+        kubectl get deployments -n staging
+        
+        # Verify resources
+        kubectl top nodes
+
+    - name: Deploy to staging
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Update image in deployment
+        kubectl set image deployment/microdiff-deployment \
+          microdiff=${{ needs.setup.outputs.image-tag }} \
+          -n staging
+        
+        # Wait for rollout
+        kubectl rollout status deployment/microdiff-deployment -n staging --timeout=600s
+
+    - name: Post-deployment verification
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Check pod status
+        kubectl get pods -n staging -l app=microdiff
+        
+        # Check service endpoints
+        kubectl get endpoints -n staging
+        
+        # Health check
+        sleep 30
+        curl -f https://staging.microdiff.example.com/health || exit 1
+
+    - name: Run smoke tests
+      run: |
+        # Basic API tests
+        curl -f https://staging.microdiff.example.com/api/v1/health
+        
+        # Model inference test
+        python tests/smoke/test_api.py --url https://staging.microdiff.example.com
+
+    - name: Notify deployment success
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        text: "✅ Staging deployment successful: ${{ needs.setup.outputs.version }}"
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Deploy to production (requires approval)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [setup, build]
+    if: needs.setup.outputs.environment == 'production'
+    environment:
+      name: production
+      url: https://microdiff.example.com
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Pre-deployment validations
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Verify cluster health
+        kubectl cluster-info
+        
+        # Check resource availability
+        kubectl top nodes
+        kubectl top pods -n production
+        
+        # Verify staging deployment success
+        if [[ "${{ inputs.force_deploy }}" != "true" ]]; then
+          curl -f https://staging.microdiff.example.com/health || {
+            echo "❌ Staging environment is not healthy"
+            exit 1
+          }
+        fi
+
+    - name: Create backup
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Backup current deployment
+        kubectl get deployment microdiff-deployment -n production -o yaml > backup-deployment.yaml
+        
+        # Backup database (if applicable)
+        kubectl exec -n production deployment/postgres -- pg_dump microdiff > backup-db.sql
+
+    - name: Blue-Green Deployment
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Get current deployment color
+        CURRENT_COLOR=$(kubectl get service microdiff-service -n production -o jsonpath='{.spec.selector.version}' || echo "blue")
+        NEW_COLOR=$([ "$CURRENT_COLOR" = "blue" ] && echo "green" || echo "blue")
+        
+        echo "Current: $CURRENT_COLOR, Deploying: $NEW_COLOR"
+        
+        # Deploy new version
+        kubectl patch deployment microdiff-deployment-${NEW_COLOR} \
+          -n production \
+          -p '{"spec":{"template":{"spec":{"containers":[{"name":"microdiff","image":"${{ needs.setup.outputs.image-tag }}"}]}}}}'
+        
+        # Wait for new deployment
+        kubectl rollout status deployment/microdiff-deployment-${NEW_COLOR} -n production --timeout=600s
+        
+        # Health check new deployment
+        sleep 60
+        NEW_ENDPOINT=$(kubectl get service microdiff-service-${NEW_COLOR} -n production -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        curl -f http://${NEW_ENDPOINT}/health
+        
+        # Switch traffic
+        kubectl patch service microdiff-service -n production -p '{"spec":{"selector":{"version":"'$NEW_COLOR'"}}}'
+        
+        # Wait and verify
+        sleep 30
+        curl -f https://microdiff.example.com/health
+        
+        # Scale down old version
+        kubectl scale deployment microdiff-deployment-${CURRENT_COLOR} --replicas=0 -n production
+
+    - name: Post-deployment verification
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Check deployment status
+        kubectl get deployments -n production
+        kubectl get pods -n production -l app=microdiff
+        
+        # Extended health checks
+        for i in {1..5}; do
+          curl -f https://microdiff.example.com/health
+          curl -f https://microdiff.example.com/api/v1/models
+          sleep 10
+        done
+
+    - name: Performance validation
+      run: |
+        # Run performance tests
+        python tests/performance/test_production.py --url https://microdiff.example.com
+        
+        # Check metrics
+        curl -f https://microdiff.example.com/metrics
+
+    - name: Update monitoring
+      run: |
+        # Update deployment timestamp for monitoring
+        curl -X POST "https://api.grafana.com/api/annotations" \
+          -H "Authorization: Bearer ${{ secrets.GRAFANA_API_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "dashboardId": 1,
+            "time": '$(date +%s000)',
+            "text": "Production deployment: ${{ needs.setup.outputs.version }}",
+            "tags": ["deployment", "production"]
+          }'
+
+    - name: Notify production deployment
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        text: "🎉 Production deployment successful: ${{ needs.setup.outputs.version }}"
+        fields: repo,commit,author,took
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Rollback capability
+  rollback:
+    name: Emergency Rollback
+    runs-on: ubuntu-latest
+    if: failure() && github.event_name == 'workflow_dispatch' && inputs.environment == 'production'
+    needs: [setup, deploy-production]
+    environment:
+      name: production-rollback
+    steps:
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Rollback deployment
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # Rollback to previous version
+        kubectl rollout undo deployment/microdiff-deployment -n production
+        
+        # Wait for rollback
+        kubectl rollout status deployment/microdiff-deployment -n production --timeout=300s
+
+    - name: Verify rollback
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl get pods -n production
+        curl -f https://microdiff.example.com/health
+
+    - name: Notify rollback
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        text: "🔄 Emergency rollback completed for production"
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Security scanning post-deployment
+  security-scan:
+    name: Post-deployment Security Scan
+    runs-on: ubuntu-latest
+    needs: [setup, deploy-staging]
+    if: needs.setup.outputs.environment == 'staging'
+    steps:
+    - name: OWASP ZAP Baseline Scan
+      uses: zaproxy/action-baseline@v0.7.0
+      with:
+        target: 'https://staging.microdiff.example.com'
+        rules_file_name: '.zap/rules.tsv'
+        cmd_options: '-a'
+
+    - name: Upload ZAP results
+      uses: actions/upload-artifact@v3
+      with:
+        name: zap-results
+        path: report_html.html
+
+  # Deployment summary
+  summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [setup, build, deploy-staging, deploy-production]
+    if: always() && needs.setup.outputs.deploy == 'true'
+    steps:
+    - name: Generate deployment summary
+      run: |
+        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ needs.setup.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version**: ${{ needs.setup.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Image**: ${{ needs.setup.outputs.image-tag }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timestamp**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ needs.setup.outputs.environment }}" == "production" ]]; then
+          echo "- **URL**: https://microdiff.example.com" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **URL**: https://staging.microdiff.example.com" >> $GITHUB_STEP_SUMMARY
+        fi
