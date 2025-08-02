@@ -1,49 +1,68 @@
-# Global Owners
+# CODEOWNERS file for MicroDiff-MatDesign
+# This file defines who is responsible for code in different parts of the repository.
+# Order matters; later matches take precedence.
+
+# Global fallback - repository maintainers
 * @danieleschmidt
 
-# Core Application Code
-/microdiff_matdesign/ @danieleschmidt @ml-team
+# Core application code
+microdiff_matdesign/ @danieleschmidt
+microdiff_matdesign/core.py @danieleschmidt @ml-team
+microdiff_matdesign/models/ @danieleschmidt @ml-team
+microdiff_matdesign/imaging/ @danieleschmidt @ml-team
 
-# ML Models and Algorithms
-/microdiff_matdesign/models/ @danieleschmidt @ml-team
-/microdiff_matdesign/core.py @danieleschmidt @ml-team
+# Infrastructure and DevOps
+Dockerfile @danieleschmidt @devops-team
+docker-compose*.yml @danieleschmidt @devops-team
+Makefile @danieleschmidt @devops-team
+.github/ @danieleschmidt @devops-team
+config/ @danieleschmidt @devops-team
 
-# Image Processing
-/microdiff_matdesign/imaging.py @danieleschmidt @imaging-team
+# CI/CD and workflows
+.github/workflows/ @danieleschmidt @devops-team
+docs/workflows/ @danieleschmidt @devops-team
 
-# CLI and User Interface
-/microdiff_matdesign/cli.py @danieleschmidt @ui-team
+# Monitoring and observability
+docs/monitoring/ @danieleschmidt @devops-team @sre-team
+docs/runbooks/ @danieleschmidt @devops-team @sre-team
+microdiff_matdesign/monitoring.py @danieleschmidt @devops-team @sre-team
 
 # Testing
-/tests/ @danieleschmidt @qa-team
+tests/ @danieleschmidt @qa-team
+pytest.ini @danieleschmidt @qa-team
+tox.ini @danieleschmidt @qa-team
 
 # Documentation
-/docs/ @danieleschmidt @docs-team
-*.md @danieleschmidt @docs-team
+docs/ @danieleschmidt @docs-team
+README.md @danieleschmidt @docs-team
+CONTRIBUTING.md @danieleschmidt @docs-team
 
-# Configuration Files
-/pyproject.toml @danieleschmidt @platform-team
-/requirements*.txt @danieleschmidt @platform-team
-/Dockerfile @danieleschmidt @platform-team
-/docker-compose*.yml @danieleschmidt @platform-team
+# Security and compliance
+SECURITY.md @danieleschmidt @security-team
+docs/security/ @danieleschmidt @security-team
 
-# CI/CD and Automation
-/.github/ @danieleschmidt @platform-team
-/scripts/ @danieleschmidt @platform-team
+# Dependencies and package management
+requirements.txt @danieleschmidt @devops-team
+pyproject.toml @danieleschmidt @devops-team
+setup.py @danieleschmidt @devops-team
 
-# Monitoring and Observability
-/docs/monitoring/ @danieleschmidt @platform-team
-/docs/runbooks/ @danieleschmidt @platform-team
+# Automation scripts
+scripts/ @danieleschmidt @devops-team
+scripts/automation/ @danieleschmidt @devops-team
 
-# Architecture and ADRs
-/docs/adr/ @danieleschmidt @architecture-team
-/docs/ARCHITECTURE.md @danieleschmidt @architecture-team
+# Configuration files
+*.yml @danieleschmidt @devops-team
+*.yaml @danieleschmidt @devops-team
+*.json @danieleschmidt @devops-team
 
-# Security
-/SECURITY.md @danieleschmidt @security-team
-/docs/monitoring/alerts.yaml @danieleschmidt @security-team
+# Architecture decisions
+docs/adr/ @danieleschmidt @architecture-team
 
-# Project Management
-/PROJECT_CHARTER.md @danieleschmidt @product-team
-/ROADMAP.md @danieleschmidt @product-team
-/BACKLOG.md @danieleschmidt @product-team
+# Project management
+PROJECT_CHARTER.md @danieleschmidt @project-managers
+ROADMAP.md @danieleschmidt @project-managers
+BACKLOG.md @danieleschmidt @project-managers
+
+# Legal and compliance
+LICENSE @danieleschmidt @legal-team
+CODE_OF_CONDUCT.md @danieleschmidt @legal-team

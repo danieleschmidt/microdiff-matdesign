@@ -1,0 +1,444 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "MicroDiff-MatDesign Monitoring",
+    "tags": ["microdiff", "monitoring", "ml"],
+    "timezone": "utc",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Health Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"microdiff-app\"}",
+            "legendFormat": "Service Up",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "green",
+                  "value": 1
+                }
+              ]
+            },
+            "unit": "none"
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(microdiff_requests_total[5m])",
+            "legendFormat": "{{method}} {{endpoint}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Requests/sec",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 4
+        }
+      },
+      {
+        "id": 3,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(microdiff_requests_total{status=\"error\"}[5m]) / rate(microdiff_requests_total[5m]) * 100",
+            "legendFormat": "Error Rate %",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Error Rate %",
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 5,
+            "colorMode": "warning",
+            "op": "gt"
+          },
+          {
+            "value": 10,
+            "colorMode": "critical",
+            "op": "gt"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 4
+        }
+      },
+      {
+        "id": 4,
+        "title": "Response Time Percentiles",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(microdiff_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(microdiff_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(microdiff_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "99th percentile",
+            "refId": "C"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Response Time (s)",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 12
+        }
+      },
+      {
+        "id": 5,
+        "title": "Model Inference Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(microdiff_model_inference_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile - {{model_type}}",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(microdiff_model_inference_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile - {{model_type}}",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Inference Time (s)",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 20
+        }
+      },
+      {
+        "id": 6,
+        "title": "GPU Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "microdiff_gpu_memory_usage_bytes / (1024^3)",
+            "legendFormat": "GPU {{device}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Memory Usage (GB)",
+            "min": 0,
+            "max": 12
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 8,
+            "colorMode": "warning",
+            "op": "gt"
+          },
+          {
+            "value": 10,
+            "colorMode": "critical",
+            "op": "gt"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 20
+        }
+      },
+      {
+        "id": 7,
+        "title": "Model Accuracy",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "microdiff_model_accuracy",
+            "legendFormat": "{{model_type}} - {{validation_set}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 0.7
+                },
+                {
+                  "color": "green",
+                  "value": 0.85
+                }
+              ]
+            },
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 12,
+          "x": 0,
+          "y": 28
+        }
+      },
+      {
+        "id": 8,
+        "title": "Active Connections",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "microdiff_active_connections",
+            "legendFormat": "Active Connections",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 50
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "none",
+            "min": 0,
+            "max": 100
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 12,
+          "x": 12,
+          "y": 28
+        }
+      },
+      {
+        "id": 9,
+        "title": "System CPU Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "CPU Usage - {{instance}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "CPU Usage %",
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 70,
+            "colorMode": "warning",
+            "op": "gt"
+          },
+          {
+            "value": 90,
+            "colorMode": "critical",
+            "op": "gt"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 10,
+        "title": "System Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+            "legendFormat": "Memory Usage - {{instance}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Memory Usage %",
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 80,
+            "colorMode": "warning",
+            "op": "gt"
+          },
+          {
+            "value": 95,
+            "colorMode": "critical",
+            "op": "gt"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        }
+      },
+      {
+        "id": 11,
+        "title": "Disk Space Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "(1 - (node_filesystem_avail_bytes{fstype!=\"tmpfs\"} / node_filesystem_size_bytes{fstype!=\"tmpfs\"})) * 100",
+            "legendFormat": "{{instance}} - {{mountpoint}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Disk Usage %",
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 80,
+            "colorMode": "warning",
+            "op": "gt"
+          },
+          {
+            "value": 90,
+            "colorMode": "critical",
+            "op": "gt"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 40
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "instance",
+          "type": "query",
+          "query": "label_values(up{job=\"microdiff-app\"}, instance)",
+          "refresh": 1,
+          "includeAll": true,
+          "allValue": ".*"
+        },
+        {
+          "name": "model_type",
+          "type": "query",
+          "query": "label_values(microdiff_model_inference_duration_seconds, model_type)",
+          "refresh": 1,
+          "includeAll": true,
+          "allValue": ".*"
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "Prometheus",
+          "expr": "increase(microdiff_deployment_timestamp[1m])",
+          "titleFormat": "Deployment",
+          "textFormat": "New deployment detected"
+        }
+      ]
+    }
+  }
+}

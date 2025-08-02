@@ -36,7 +36,7 @@ pip install microdiff-matdesign[gpu]
 pip install microdiff-matdesign[full]
 
 # From source
-git clone https://github.com/yourusername/microdiff-matdesign
+git clone https://github.com/danieleschmidt/microdiff-matdesign
 cd microdiff-matdesign
 pip install -e ".[dev]"
 ```
@@ -289,92 +289,75 @@ optimal_params = lpbf.optimize(
     }
 )
 
-## SDLC & DevOps Infrastructure
+## 🏗️ Development & SDLC
 
-This repository implements enterprise-grade SDLC practices with comprehensive automation:
-
-### 🔄 CI/CD Pipeline
-- **Automated Testing**: Multi-Python version testing (3.8-3.11) with pytest
-- **Code Quality**: Linting (flake8), type checking (mypy), security scanning (bandit)
-- **Coverage**: Automated coverage reporting with 80%+ target
-- **Deployment**: Containerized deployment with Docker and Kubernetes support
-
-### 🛡️ Security & Compliance
-- **Vulnerability Scanning**: Automated security checks with CodeQL and Trivy
-- **Dependency Management**: Automated dependency updates with safety validation
-- **Secrets Management**: Secure handling of API keys and credentials
-- **SLSA Compliance**: Software supply chain security
-
-### 📊 Monitoring & Observability
-- **Health Checks**: Comprehensive application and system health monitoring
-- **Metrics**: Prometheus metrics with Grafana dashboards
-- **Logging**: Structured JSON logging with correlation IDs
-- **Alerting**: Intelligent alerting with runbook automation
-
-### 🚀 Automation Scripts
-- **Metrics Collection**: `./scripts/collect-metrics.py --summary`
-- **Dependency Updates**: `./scripts/automation/dependency-updates.sh`
-- **Code Quality**: `./scripts/automation/code-quality-monitor.py`
-
-### 📋 Documentation
-- **Architecture**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **API Reference**: [docs/guides/](docs/guides/)
-- **Runbooks**: [docs/runbooks/](docs/runbooks/)
-- **ADRs**: [docs/adr/](docs/adr/)
-
-For complete SDLC setup instructions, see [docs/SETUP_REQUIRED.md](docs/SETUP_REQUIRED.md).
-
-## Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+This project implements a comprehensive Software Development Life Cycle (SDLC) with enterprise-grade practices:
 
 ### Quick Development Setup
 
-```bash
-# Clone and setup development environment
-git clone https://github.com/danieleschmidt/microdiff-matdesign.git
+# Clone repository
+git clone https://github.com/danieleschmidt/microdiff-matdesign
 cd microdiff-matdesign
 
-# Install development dependencies
+# Setup development environment (recommended)
+docker-compose -f docker-compose.dev.yml up -d
+
+# Or install locally
 pip install -e ".[dev]"
+pre-commit install
 
 # Run tests
-pytest
+pytest tests/
 
 # Run quality checks
-flake8 microdiff_matdesign
-mypy microdiff_matdesign
-bandit -r microdiff_matdesign
-
-# Generate coverage report
-pytest --cov=microdiff_matdesign --cov-report=html
+make lint
+make security-check
 ```
 
-## License
+### Key SDLC Features
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+- **🧪 Comprehensive Testing**: Unit, integration, and E2E tests with 85%+ coverage target
+- **🔒 Security-First**: Multi-layer security scanning (SAST, SCA, container, IaC, DAST)
+- **📊 Quality Monitoring**: Automated code quality tracking with trend analysis
+- **🚀 CI/CD Pipeline**: Automated testing, building, and deployment with blue-green strategy
+- **📈 Observability**: Prometheus metrics, Grafana dashboards, and structured logging
+- **🤖 Automation**: Dependency updates, repository maintenance, and metrics collection
+- **📚 Documentation**: Architecture decisions, runbooks, and API documentation
 
-## Citation
+### Repository Structure
 
-If you use MicroDiff-MatDesign in your research, please cite:
-
-```bibtex
-@software{microdiff_matdesign,
-  title={MicroDiff-MatDesign: Diffusion Models for Inverse Material Design},
-  author={Schmidt, Daniel E.},
-  url={https://github.com/danieleschmidt/microdiff-matdesign},
-  year={2024},
-  license={Apache-2.0}
-}
+```
+microdiff-matdesign/
+├── microdiff_matdesign/     # Core application code
+├── tests/                   # Comprehensive test suite
+├── docs/                    # Documentation and guides
+├── scripts/                 # Automation and utility scripts
+├── config/                  # Configuration files
+├── .github/                 # GitHub workflows and templates
+└── docker-compose*.yml     # Container orchestration
 ```
 
-## Support
+### Development Workflow
 
-- 📖 **Documentation**: [microdiff-matdesign.readthedocs.io](https://microdiff-matdesign.readthedocs.io/)
-- 🐛 **Issues**: [GitHub Issues](https://github.com/danieleschmidt/microdiff-matdesign/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/danieleschmidt/microdiff-matdesign/discussions)
-- 📧 **Email**: [support@microdiff-matdesign.org](mailto:support@microdiff-matdesign.org)
+1. **Create Feature Branch**: `git checkout -b feature/your-feature`
+2. **Develop with Quality Gates**: Pre-commit hooks ensure code quality
+3. **Test Thoroughly**: Run full test suite before pushing
+4. **Create Pull Request**: Automated CI/CD pipeline validates changes
+5. **Code Review**: Required reviews from code owners
+6. **Deploy**: Automated deployment to staging, then production
 
----
+### Documentation
 
-**🤖 This repository includes enterprise-ready SDLC implementation with automated testing, security scanning, monitoring, and deployment infrastructure.**
+- **[Architecture Guide](docs/ARCHITECTURE.md)**: System design and components
+- **[Contributing Guide](CONTRIBUTING.md)**: Development guidelines and standards
+- **[Setup Guide](docs/SETUP_REQUIRED.md)**: Manual setup requirements
+- **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)**: Complete SDLC overview
+- **[Monitoring Guide](docs/monitoring/README.md)**: Observability and alerting
+- **[Workflow Documentation](docs/workflows/README.md)**: CI/CD pipeline details
+
+### Getting Help
+
+- **Issues**: Use GitHub issues with appropriate labels
+- **Security**: Follow [security policy](SECURITY.md) for reporting vulnerabilities
+- **Discussions**: Join GitHub Discussions for questions and ideas
+- **Contributing**: See [contributing guidelines](CONTRIBUTING.md) for getting started

@@ -1,0 +1,258 @@
+groups:
+- name: microdiff.rules
+  rules:
+  # Error rate alerts
+  - alert: HighErrorRate
+    expr: |
+      (
+        rate(microdiff_requests_total{status="error"}[5m]) /
+        rate(microdiff_requests_total[5m])
+      ) > 0.1
+    for: 5m
+    labels:
+      severity: warning
+      team: engineering
+      service: microdiff
+    annotations:
+      summary: "High error rate detected in MicroDiff service"
+      description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+      runbook_url: "https://runbooks.example.com/microdiff-high-error-rate"
+
+  - alert: CriticalErrorRate
+    expr: |
+      (
+        rate(microdiff_requests_total{status="error"}[5m]) /
+        rate(microdiff_requests_total[5m])
+      ) > 0.25
+    for: 2m
+    labels:
+      severity: critical
+      team: engineering
+      service: microdiff
+    annotations:
+      summary: "Critical error rate in MicroDiff service"
+      description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+      runbook_url: "https://runbooks.example.com/microdiff-critical-error-rate"
+
+  # Latency alerts
+  - alert: HighLatency
+    expr: |
+      histogram_quantile(0.95, 
+        rate(microdiff_request_duration_seconds_bucket[5m])
+      ) > 5
+    for: 5m
+    labels:
+      severity: warning
+      team: engineering
+      service: microdiff
+    annotations:
+      summary: "High request latency in MicroDiff service"
+      description: "95th percentile latency is {{ $value }}s over the last 5 minutes"
+      runbook_url: "https://runbooks.example.com/microdiff-high-latency"
+
+  - alert: ModelInferenceLatency
+    expr: |
+      histogram_quantile(0.95, 
+        rate(microdiff_model_inference_duration_seconds_bucket[5m])
+      ) > 10
+    for: 2m
+    labels:
+      severity: warning
+      team: ml-engineering
+      service: microdiff
+    annotations:
+      summary: "High model inference latency"
+      description: "95th percentile model inference latency is {{ $value }}s"
+      runbook_url: "https://runbooks.example.com/microdiff-model-latency"
+
+  # GPU and resource alerts
+  - alert: GPUMemoryHigh
+    expr: microdiff_gpu_memory_usage_bytes / (1024^3) > 8
+    for: 1m
+    labels:
+      severity: warning
+      team: ml-engineering
+      service: microdiff
+    annotations:
+      summary: "High GPU memory usage"
+      description: "GPU {{ $labels.device }} memory usage is {{ $value }}GB"
+      runbook_url: "https://runbooks.example.com/microdiff-gpu-memory"
+
+  - alert: GPUMemoryCritical
+    expr: microdiff_gpu_memory_usage_bytes / (1024^3) > 10
+    for: 30s
+    labels:
+      severity: critical
+      team: ml-engineering
+      service: microdiff
+    annotations:
+      summary: "Critical GPU memory usage"
+      description: "GPU {{ $labels.device }} memory usage is {{ $value }}GB, approaching limit"
+      runbook_url: "https://runbooks.example.com/microdiff-gpu-memory-critical"
+
+  # Service availability alerts
+  - alert: ServiceDown
+    expr: up{job="microdiff-app"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      team: engineering
+      service: microdiff
+    annotations:
+      summary: "MicroDiff service is down"
+      description: "MicroDiff service has been down for more than 1 minute"
+      runbook_url: "https://runbooks.example.com/microdiff-service-down"
+
+  - alert: InstanceDown
+    expr: up{job="microdiff-app"} == 0
+    for: 5m
+    labels:
+      severity: warning
+      team: engineering
+      service: microdiff
+    annotations:
+      summary: "MicroDiff instance {{ $labels.instance }} is down"
+      description: "Instance {{ $labels.instance }} has been down for more than 5 minutes"
+
+  # Traffic alerts
+  - alert: LowTraffic
+    expr: |
+      rate(microdiff_requests_total[5m]) < 0.1
+    for: 10m
+    labels:
+      severity: warning
+      team: engineering
+      service: microdiff
+    annotations:
+      summary: "Unusually low traffic to MicroDiff service"
+      description: "Request rate is {{ $value }} requests/second over the last 5 minutes"
+
+  - alert: HighTraffic
+    expr: |
+      rate(microdiff_requests_total[5m]) > 100
+    for: 5m
+    labels:
+      severity: warning
+      team: engineering
+      service: microdiff
+    annotations:
+      summary: "High traffic to MicroDiff service"
+      description: "Request rate is {{ $value }} requests/second over the last 5 minutes"
+      runbook_url: "https://runbooks.example.com/microdiff-high-traffic"
+
+  # Model accuracy alerts
+  - alert: LowModelAccuracy
+    expr: microdiff_model_accuracy < 0.8
+    for: 5m
+    labels:
+      severity: warning
+      team: ml-engineering
+      service: microdiff
+    annotations:
+      summary: "Low model accuracy detected"
+      description: "Model {{ $labels.model_type }} accuracy is {{ $value }} on {{ $labels.validation_set }}"
+      runbook_url: "https://runbooks.example.com/microdiff-model-accuracy"
+
+  - alert: CriticalModelAccuracy
+    expr: microdiff_model_accuracy < 0.6
+    for: 2m
+    labels:
+      severity: critical
+      team: ml-engineering
+      service: microdiff
+    annotations:
+      summary: "Critical model accuracy degradation"
+      description: "Model {{ $labels.model_type }} accuracy is {{ $value }} on {{ $labels.validation_set }}"
+      runbook_url: "https://runbooks.example.com/microdiff-model-accuracy-critical"
+
+  # Database and storage alerts
+  - alert: DatabaseConnectionsHigh
+    expr: microdiff_active_connections > 80
+    for: 5m
+    labels:
+      severity: warning
+      team: engineering
+      service: microdiff
+    annotations:
+      summary: "High number of database connections"
+      description: "{{ $value }} active database connections"
+      runbook_url: "https://runbooks.example.com/microdiff-database-connections"
+
+  # Recording rules for better performance
+  - record: microdiff:request_rate_5m
+    expr: rate(microdiff_requests_total[5m])
+
+  - record: microdiff:error_rate_5m
+    expr: |
+      rate(microdiff_requests_total{status="error"}[5m]) /
+      rate(microdiff_requests_total[5m])
+
+  - record: microdiff:latency_p95_5m
+    expr: |
+      histogram_quantile(0.95, 
+        rate(microdiff_request_duration_seconds_bucket[5m])
+      )
+
+  - record: microdiff:latency_p50_5m
+    expr: |
+      histogram_quantile(0.50, 
+        rate(microdiff_request_duration_seconds_bucket[5m])
+      )
+
+  - record: microdiff:model_inference_p95_5m
+    expr: |
+      histogram_quantile(0.95, 
+        rate(microdiff_model_inference_duration_seconds_bucket[5m])
+      )
+
+- name: microdiff.infrastructure
+  rules:
+  # CPU and memory alerts
+  - alert: HighCPUUsage
+    expr: |
+      100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+    for: 5m
+    labels:
+      severity: warning
+      team: platform
+      service: microdiff
+    annotations:
+      summary: "High CPU usage on {{ $labels.instance }}"
+      description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+  - alert: HighMemoryUsage
+    expr: |
+      (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+    for: 5m
+    labels:
+      severity: warning
+      team: platform
+      service: microdiff
+    annotations:
+      summary: "High memory usage on {{ $labels.instance }}"
+      description: "Memory usage is {{ $value }}% on {{ $labels.instance }}"
+
+  # Disk space alerts
+  - alert: LowDiskSpace
+    expr: |
+      (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) * 100 < 20
+    for: 5m
+    labels:
+      severity: warning
+      team: platform
+      service: microdiff
+    annotations:
+      summary: "Low disk space on {{ $labels.instance }}"
+      description: "Disk {{ $labels.mountpoint }} has {{ $value }}% space remaining"
+
+  - alert: CriticalDiskSpace
+    expr: |
+      (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) * 100 < 10
+    for: 1m
+    labels:
+      severity: critical
+      team: platform
+      service: microdiff
+    annotations:
+      summary: "Critical disk space on {{ $labels.instance }}"
+      description: "Disk {{ $labels.mountpoint }} has only {{ $value }}% space remaining"

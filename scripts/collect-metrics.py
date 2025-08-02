@@ -1,625 +1,478 @@
 #!/usr/bin/env python3
 """
-Automated metrics collection script for MicroDiff-MatDesign.
+Automated metrics collection script for MicroDiff-MatDesign project.
 
-This script collects comprehensive metrics from various sources including
-GitHub API, code analysis tools, CI/CD systems, and application monitoring.
+This script collects various metrics from different sources and updates
+the project metrics tracking system.
 """
 
 import json
 import os
 import sys
 import subprocess
-import logging
-import argparse
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, asdict
-
 import requests
-import yaml
-
-
-@dataclass
-class MetricsConfig:
-    """Configuration for metrics collection."""
-    github_token: Optional[str] = None
-    github_repo: str = "danieleschmidt/microdiff-matdesign"
-    output_format: str = "json"
-    output_file: Optional[str] = None
-    include_git_stats: bool = True
-    include_code_quality: bool = True
-    include_dependencies: bool = True
-    verbose: bool = False
-
+import datetime
+from pathlib import Path
+from typing import Dict, Any, Optional
+import argparse
 
 class MetricsCollector:
-    """Comprehensive metrics collection system."""
+    """Collect and aggregate project metrics from various sources."""
     
-    def __init__(self, config: MetricsConfig):
-        self.config = config
-        self.logger = self._setup_logging()
-        self.repo_path = Path.cwd()
-        self.metrics = self._load_base_metrics()
+    def __init__(self, config_path: str = ".github/project-metrics.json"):
+        self.config_path = Path(config_path)
+        self.metrics_data = self._load_metrics_config()
+        self.collected_metrics = {}
         
-    def _setup_logging(self) -> logging.Logger:
-        """Setup logging configuration."""
-        logging.basicConfig(
-            level=logging.DEBUG if self.config.verbose else logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        return logging.getLogger(__name__)
-    
-    def _load_base_metrics(self) -> Dict[str, Any]:
-        """Load base metrics structure."""
-        metrics_file = self.repo_path / ".github" / "project-metrics.json"
-        if metrics_file.exists():
-            with open(metrics_file, 'r') as f:
+    def _load_metrics_config(self) -> Dict[str, Any]:
+        """Load metrics configuration from JSON file."""
+        try:
+            with open(self.config_path, 'r') as f:
                 return json.load(f)
-        else:
-            self.logger.warning("Base metrics file not found, creating empty structure")
-            return {"metrics": {}, "targets": {}, "tracking": {}}
+        except FileNotFoundError:
+            print(f"❌ Metrics config file not found: {self.config_path}")
+            sys.exit(1)
+        except json.JSONDecodeError as e:
+            print(f"❌ Invalid JSON in metrics config: {e}")
+            sys.exit(1)
     
-    def collect_all_metrics(self) -> Dict[str, Any]:
-        """Collect all available metrics."""
-        self.logger.info("Starting comprehensive metrics collection")
-        
-        if self.config.include_git_stats:
-            self.collect_git_metrics()
-            
-        if self.config.github_token:
-            self.collect_github_metrics()
-            
-        if self.config.include_code_quality:
-            self.collect_code_quality_metrics()
-            
-        if self.config.include_dependencies:
-            self.collect_dependency_metrics()
-            
-        self.collect_file_metrics()
-        self.collect_test_metrics()
-        
-        # Update tracking information
-        self.metrics["tracking"]["last_collection"] = datetime.now(timezone.utc).isoformat()
-        
-        self.logger.info("Metrics collection completed")
-        return self.metrics
-    
-    def collect_git_metrics(self) -> None:
+    def collect_git_metrics(self) -> Dict[str, Any]:
         """Collect Git repository metrics."""
-        self.logger.info("Collecting Git metrics")
+        print("📊 Collecting Git metrics...")
+        
+        metrics = {}
         
         try:
-            # Total commits
-            result = subprocess.run(
-                ["git", "rev-list", "--count", "HEAD"],
-                capture_output=True, text=True, cwd=self.repo_path
-            )
-            total_commits = int(result.stdout.strip()) if result.returncode == 0 else 0
+            # Commit frequency (last 30 days)
+            result = subprocess.run([
+                'git', 'log', '--since=30.days.ago', '--oneline'
+            ], capture_output=True, text=True, check=True)
             
-            # Commits in last month
-            result = subprocess.run(
-                ["git", "rev-list", "--count", "--since=1.month", "HEAD"],
-                capture_output=True, text=True, cwd=self.repo_path
-            )
-            monthly_commits = int(result.stdout.strip()) if result.returncode == 0 else 0
+            commit_count = len(result.stdout.strip().split('\n')) if result.stdout.strip() else 0
+            metrics['commit_frequency'] = commit_count
             
-            # Contributors
-            result = subprocess.run(
-                ["git", "shortlog", "-sn", "HEAD"],
-                capture_output=True, text=True, cwd=self.repo_path
-            )
-            contributors = []
-            if result.returncode == 0:
-                for line in result.stdout.strip().split('\n'):
-                    if line.strip():
-                        parts = line.strip().split('\t')
-                        if len(parts) >= 2:
-                            contributors.append({
-                                "name": parts[1],
-                                "commits": int(parts[0])
-                            })
+            # Contributors (last 30 days)
+            result = subprocess.run([
+                'git', 'log', '--since=30.days.ago', '--format=%ae'
+            ], capture_output=True, text=True, check=True)
             
-            # Branches
-            result = subprocess.run(
-                ["git", "branch", "-r"],
-                capture_output=True, text=True, cwd=self.repo_path
-            )
-            total_branches = len(result.stdout.strip().split('\n')) if result.returncode == 0 else 0
+            contributors = set(result.stdout.strip().split('\n')) if result.stdout.strip() else set()
+            metrics['active_contributors'] = len(contributors)
             
-            # Update metrics
-            self.metrics.setdefault("metrics", {}).setdefault("development", {}).update({
-                "commits": {
-                    "total": total_commits,
-                    "last_month": monthly_commits,
-                    "avg_per_week": monthly_commits / 4 if monthly_commits > 0 else 0,
-                    "contributors": contributors
-                },
-                "branches": {
-                    "total": total_branches,
-                    "active": len([c for c in contributors if c["commits"] > 0]),
-                    "stale": max(0, total_branches - len(contributors))
-                }
-            })
-            
-        except Exception as e:
-            self.logger.error(f"Error collecting Git metrics: {e}")
-    
-    def collect_github_metrics(self) -> None:
-        """Collect GitHub API metrics."""
-        self.logger.info("Collecting GitHub metrics")
-        
-        if not self.config.github_token:
-            self.logger.warning("GitHub token not provided, skipping GitHub metrics")
-            return
-            
-        headers = {
-            "Authorization": f"token {self.config.github_token}",
-            "Accept": "application/vnd.github.v3+json"
-        }
-        
-        try:
-            # Repository information
-            repo_url = f"https://api.github.com/repos/{self.config.github_repo}"
-            response = requests.get(repo_url, headers=headers)
-            
-            if response.status_code == 200:
-                repo_data = response.json()
-                
-                # Basic repository metrics
-                self.metrics.setdefault("metrics", {}).setdefault("community", {}).setdefault("github", {}).update({
-                    "stars": repo_data.get("stargazers_count", 0),
-                    "forks": repo_data.get("forks_count", 0),
-                    "watchers": repo_data.get("watchers_count", 0),
-                    "open_issues": repo_data.get("open_issues_count", 0)
-                })
-                
-                # Pull requests
-                pr_url = f"{repo_url}/pulls?state=all&per_page=100"
-                pr_response = requests.get(pr_url, headers=headers)
-                
-                if pr_response.status_code == 200:
-                    prs = pr_response.json()
-                    open_prs = len([pr for pr in prs if pr["state"] == "open"])
-                    merged_prs = len([pr for pr in prs if pr["merged_at"] is not None])
-                    closed_prs = len([pr for pr in prs if pr["state"] == "closed" and pr["merged_at"] is None])
-                    
-                    self.metrics["metrics"]["development"]["pull_requests"] = {
-                        "total": len(prs),
-                        "open": open_prs,
-                        "merged": merged_prs,
-                        "closed": closed_prs,
-                        "avg_time_to_merge_hours": self._calculate_avg_merge_time(prs)
-                    }
-                
-                # Issues
-                issues_url = f"{repo_url}/issues?state=all&per_page=100"
-                issues_response = requests.get(issues_url, headers=headers)
-                
-                if issues_response.status_code == 200:
-                    issues = issues_response.json()
-                    # Filter out pull requests (they appear in issues endpoint)
-                    actual_issues = [issue for issue in issues if "pull_request" not in issue]
-                    
-                    open_issues = len([issue for issue in actual_issues if issue["state"] == "open"])
-                    closed_issues = len([issue for issue in actual_issues if issue["state"] == "closed"])
-                    
-                    # Label counts
-                    label_counts = {}
-                    for issue in actual_issues:
-                        for label in issue.get("labels", []):
-                            label_name = label["name"]
-                            label_counts[label_name] = label_counts.get(label_name, 0) + 1
-                    
-                    self.metrics["metrics"]["development"]["issues"] = {
-                        "total": len(actual_issues),
-                        "open": open_issues,
-                        "closed": closed_issues,
-                        "avg_time_to_close_hours": self._calculate_avg_close_time(actual_issues),
-                        "labels": label_counts
-                    }
-                
-                # Releases
-                releases_url = f"{repo_url}/releases"
-                releases_response = requests.get(releases_url, headers=headers)
-                
-                if releases_response.status_code == 200:
-                    releases = releases_response.json()
-                    
-                    self.metrics["metrics"]["development"]["releases"] = {
-                        "total": len(releases),
-                        "latest": releases[0]["tag_name"] if releases else None,
-                        "avg_time_between_releases_days": self._calculate_avg_release_interval(releases)
-                    }
-                    
-            else:
-                self.logger.error(f"GitHub API error: {response.status_code}")
-                
-        except Exception as e:
-            self.logger.error(f"Error collecting GitHub metrics: {e}")
-    
-    def collect_code_quality_metrics(self) -> None:
-        """Collect code quality metrics."""
-        self.logger.info("Collecting code quality metrics")
-        
-        try:
             # Lines of code
-            loc_data = self._count_lines_of_code()
+            result = subprocess.run([
+                'find', '.', '-name', '*.py', '-not', '-path', './.*', 
+                '-not', '-path', './venv/*', '-not', '-path', './env/*',
+                '-exec', 'wc', '-l', '{}', '+'
+            ], capture_output=True, text=True)
             
-            # Test coverage (if pytest-cov is available)
-            coverage_data = self._get_test_coverage()
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')
+                total_lines = 0
+                for line in lines[:-1]:  # Skip total line
+                    parts = line.strip().split()
+                    if parts and parts[0].isdigit():
+                        total_lines += int(parts[0])
+                metrics['lines_of_code'] = total_lines
             
-            # Update metrics
-            self.metrics.setdefault("metrics", {}).setdefault("code_quality", {}).update({
-                "lines_of_code": loc_data,
-                "test_coverage": coverage_data
-            })
-            
-        except Exception as e:
-            self.logger.error(f"Error collecting code quality metrics: {e}")
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️ Error collecting Git metrics: {e}")
+        
+        return metrics
     
-    def collect_dependency_metrics(self) -> None:
-        """Collect dependency metrics."""
-        self.logger.info("Collecting dependency metrics")
+    def collect_test_metrics(self) -> Dict[str, Any]:
+        """Collect test coverage and execution metrics."""
+        print("🧪 Collecting test metrics...")
+        
+        metrics = {}
         
         try:
-            # Python dependencies from requirements.txt
-            deps = self._analyze_python_dependencies()
+            # Run tests with coverage
+            result = subprocess.run([
+                'python', '-m', 'pytest', 'tests/', 
+                '--cov=microdiff_matdesign',
+                '--cov-report=json',
+                '--quiet'
+            ], capture_output=True, text=True)
             
-            self.metrics.setdefault("metrics", {}).setdefault("code_quality", {})["dependencies"] = deps
-            
-        except Exception as e:
-            self.logger.error(f"Error collecting dependency metrics: {e}")
-    
-    def collect_file_metrics(self) -> None:
-        """Collect file and structure metrics."""
-        self.logger.info("Collecting file metrics")
-        
-        try:
-            # Count different file types
-            file_counts = {
-                "python": 0,
-                "yaml": 0,
-                "markdown": 0,
-                "dockerfile": 0,
-                "json": 0
-            }
-            
-            for file_path in self.repo_path.rglob("*"):
-                if file_path.is_file() and not self._is_ignored_path(file_path):
-                    suffix = file_path.suffix.lower()
-                    if suffix == ".py":
-                        file_counts["python"] += 1
-                    elif suffix in [".yml", ".yaml"]:
-                        file_counts["yaml"] += 1
-                    elif suffix == ".md":
-                        file_counts["markdown"] += 1
-                    elif file_path.name.lower() in ["dockerfile", "dockerfile.dev"]:
-                        file_counts["dockerfile"] += 1
-                    elif suffix == ".json":
-                        file_counts["json"] += 1
-            
-            # Documentation metrics
-            docs_dir = self.repo_path / "docs"
-            doc_pages = 0
-            doc_word_count = 0
-            
-            if docs_dir.exists():
-                for md_file in docs_dir.rglob("*.md"):
-                    doc_pages += 1
-                    try:
-                        with open(md_file, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            doc_word_count += len(content.split())
-                    except Exception:
-                        pass
-            
-            # Update metrics
-            self.metrics.setdefault("metrics", {}).setdefault("community", {}).setdefault("documentation", {}).update({
-                "pages": doc_pages,
-                "word_count": doc_word_count,
-                "last_updated": datetime.now(timezone.utc).isoformat(),
-                "completeness_score": min(100, (doc_pages / 10) * 100)  # Arbitrary scoring
-            })
-            
-        except Exception as e:
-            self.logger.error(f"Error collecting file metrics: {e}")
-    
-    def collect_test_metrics(self) -> None:
-        """Collect test-related metrics."""
-        self.logger.info("Collecting test metrics")
-        
-        try:
-            # Count test files
-            test_files = list(self.repo_path.rglob("test_*.py")) + list(self.repo_path.rglob("*_test.py"))
-            test_count = len(test_files)
-            
-            # Try to run tests and get metrics
-            if (self.repo_path / "pytest.ini").exists() or (self.repo_path / "pyproject.toml").exists():
-                try:
-                    result = subprocess.run(
-                        ["python", "-m", "pytest", "--collect-only", "-q"],
-                        capture_output=True, text=True, cwd=self.repo_path, timeout=30
-                    )
-                    if result.returncode == 0:
-                        # Parse pytest collection output
-                        lines = result.stdout.strip().split('\n')
-                        for line in lines:
-                            if "collected" in line and "item" in line:
-                                # Extract number from "collected X items"
-                                parts = line.split()
-                                for i, part in enumerate(parts):
-                                    if part == "collected" and i + 1 < len(parts):
-                                        try:
-                                            test_count = int(parts[i + 1])
-                                            break
-                                        except ValueError:
-                                            pass
-                except Exception:
-                    pass
-            
-            # Update metrics
-            self.metrics.setdefault("metrics", {}).setdefault("ci_cd", {}).setdefault("tests", {}).update({
-                "total_tests": test_count,
-                "test_files": len(test_files)
-            })
-            
-        except Exception as e:
-            self.logger.error(f"Error collecting test metrics: {e}")
-    
-    # Helper methods
-    
-    def _calculate_avg_merge_time(self, prs: List[Dict]) -> float:
-        """Calculate average time to merge PRs in hours."""
-        merge_times = []
-        for pr in prs:
-            if pr.get("merged_at") and pr.get("created_at"):
-                try:
-                    created = datetime.fromisoformat(pr["created_at"].replace('Z', '+00:00'))
-                    merged = datetime.fromisoformat(pr["merged_at"].replace('Z', '+00:00'))
-                    hours = (merged - created).total_seconds() / 3600
-                    merge_times.append(hours)
-                except Exception:
-                    continue
-        
-        return sum(merge_times) / len(merge_times) if merge_times else 0
-    
-    def _calculate_avg_close_time(self, issues: List[Dict]) -> float:
-        """Calculate average time to close issues in hours."""
-        close_times = []
-        for issue in issues:
-            if issue.get("closed_at") and issue.get("created_at"):
-                try:
-                    created = datetime.fromisoformat(issue["created_at"].replace('Z', '+00:00'))
-                    closed = datetime.fromisoformat(issue["closed_at"].replace('Z', '+00:00'))
-                    hours = (closed - created).total_seconds() / 3600
-                    close_times.append(hours)
-                except Exception:
-                    continue
-        
-        return sum(close_times) / len(close_times) if close_times else 0
-    
-    def _calculate_avg_release_interval(self, releases: List[Dict]) -> float:
-        """Calculate average time between releases in days."""
-        if len(releases) < 2:
-            return 0
-            
-        intervals = []
-        for i in range(len(releases) - 1):
-            try:
-                current = datetime.fromisoformat(releases[i]["created_at"].replace('Z', '+00:00'))
-                previous = datetime.fromisoformat(releases[i + 1]["created_at"].replace('Z', '+00:00'))
-                days = (current - previous).days
-                intervals.append(days)
-            except Exception:
-                continue
-        
-        return sum(intervals) / len(intervals) if intervals else 0
-    
-    def _count_lines_of_code(self) -> Dict[str, int]:
-        """Count lines of code by file type."""
-        loc_data = {
-            "total": 0,
-            "python": 0,
-            "yaml": 0,
-            "markdown": 0,
-            "dockerfile": 0
-        }
-        
-        for file_path in self.repo_path.rglob("*"):
-            if file_path.is_file() and not self._is_ignored_path(file_path):
-                try:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        lines = len(f.readlines())
-                        loc_data["total"] += lines
-                        
-                        suffix = file_path.suffix.lower()
-                        if suffix == ".py":
-                            loc_data["python"] += lines
-                        elif suffix in [".yml", ".yaml"]:
-                            loc_data["yaml"] += lines
-                        elif suffix == ".md":
-                            loc_data["markdown"] += lines
-                        elif file_path.name.lower() in ["dockerfile", "dockerfile.dev"]:
-                            loc_data["dockerfile"] += lines
-                            
-                except Exception:
-                    continue
-        
-        return loc_data
-    
-    def _get_test_coverage(self) -> Dict[str, Any]:
-        """Get test coverage information."""
-        coverage_data = {
-            "percentage": 0,
-            "lines_covered": 0,
-            "lines_total": 0,
-            "missing_coverage": []
-        }
-        
-        # Try to run coverage if available
-        try:
-            result = subprocess.run(
-                ["python", "-m", "pytest", "--cov=microdiff_matdesign", "--cov-report=json", "--cov-report=term"],
-                capture_output=True, text=True, cwd=self.repo_path, timeout=120
-            )
-            
-            # Look for coverage.json file
-            coverage_file = self.repo_path / "coverage.json"
+            # Parse coverage report
+            coverage_file = Path('coverage.json')
             if coverage_file.exists():
                 with open(coverage_file, 'r') as f:
-                    coverage_json = json.load(f)
-                    
-                coverage_data.update({
-                    "percentage": coverage_json.get("totals", {}).get("percent_covered", 0),
-                    "lines_covered": coverage_json.get("totals", {}).get("covered_lines", 0),
-                    "lines_total": coverage_json.get("totals", {}).get("num_statements", 0)
-                })
+                    coverage_data = json.load(f)
                 
+                metrics['test_coverage'] = round(coverage_data['totals']['percent_covered'], 2)
+                metrics['lines_covered'] = coverage_data['totals']['covered_lines']
+                metrics['total_lines'] = coverage_data['totals']['num_statements']
+                
+                # Clean up
+                coverage_file.unlink()
+            
+            # Test execution time (approximate from output)
+            if result.returncode == 0:
+                output_lines = result.stdout.split('\n')
+                for line in output_lines:
+                    if 'seconds' in line and ('passed' in line or 'failed' in line):
+                        # Extract execution time
+                        parts = line.split()
+                        for i, part in enumerate(parts):
+                            if 'seconds' in part:
+                                try:
+                                    exec_time = float(parts[i-1])
+                                    metrics['test_execution_time'] = exec_time
+                                    break
+                                except (ValueError, IndexError):
+                                    pass
+            
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️ Error collecting test metrics: {e}")
         except Exception as e:
-            self.logger.debug(f"Could not get coverage data: {e}")
+            print(f"⚠️ Unexpected error in test metrics: {e}")
         
-        return coverage_data
+        return metrics
     
-    def _analyze_python_dependencies(self) -> Dict[str, Any]:
-        """Analyze Python dependencies."""
-        deps_data = {
-            "total": 0,
-            "outdated": 0,
-            "security_issues": 0,
-            "licenses": {}
+    def collect_security_metrics(self) -> Dict[str, Any]:
+        """Collect security vulnerability metrics."""
+        print("🔒 Collecting security metrics...")
+        
+        metrics = {
+            'vulnerabilities': {
+                'critical': 0,
+                'high': 0,
+                'medium': 0,
+                'low': 0
+            }
         }
         
-        # Check requirements.txt
-        req_file = self.repo_path / "requirements.txt"
-        if req_file.exists():
+        try:
+            # Run safety check
+            result = subprocess.run([
+                'python', '-m', 'safety', 'check', '--json'
+            ], capture_output=True, text=True)
+            
+            if result.stdout:
+                try:
+                    safety_data = json.loads(result.stdout)
+                    for vuln in safety_data:
+                        severity = vuln.get('vulnerability_id', '').lower()
+                        if 'critical' in severity:
+                            metrics['vulnerabilities']['critical'] += 1
+                        elif 'high' in severity:
+                            metrics['vulnerabilities']['high'] += 1
+                        elif 'medium' in severity:
+                            metrics['vulnerabilities']['medium'] += 1
+                        else:
+                            metrics['vulnerabilities']['low'] += 1
+                except json.JSONDecodeError:
+                    pass
+            
+            # Run bandit security check
+            result = subprocess.run([
+                'python', '-m', 'bandit', '-r', 'microdiff_matdesign',
+                '-f', 'json'
+            ], capture_output=True, text=True)
+            
+            if result.stdout:
+                try:
+                    bandit_data = json.loads(result.stdout)
+                    for issue in bandit_data.get('results', []):
+                        severity = issue.get('issue_severity', '').lower()
+                        if severity == 'high':
+                            metrics['vulnerabilities']['high'] += 1
+                        elif severity == 'medium':
+                            metrics['vulnerabilities']['medium'] += 1
+                        elif severity == 'low':
+                            metrics['vulnerabilities']['low'] += 1
+                except json.JSONDecodeError:
+                    pass
+        
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️ Error collecting security metrics: {e}")
+        except Exception as e:
+            print(f"⚠️ Unexpected error in security metrics: {e}")
+        
+        return metrics
+    
+    def collect_dependency_metrics(self) -> Dict[str, Any]:
+        """Collect dependency freshness metrics."""
+        print("📦 Collecting dependency metrics...")
+        
+        metrics = {}
+        
+        try:
+            # Check for outdated packages
+            result = subprocess.run([
+                'python', '-m', 'pip', 'list', '--outdated', '--format=json'
+            ], capture_output=True, text=True, check=True)
+            
+            if result.stdout:
+                outdated_packages = json.loads(result.stdout)
+                metrics['outdated_dependencies'] = len(outdated_packages)
+                
+                # Calculate average age of outdated packages
+                if outdated_packages:
+                    # This is a simplified calculation
+                    # In practice, you'd need to check package release dates
+                    metrics['dependency_freshness_days'] = len(outdated_packages) * 7  # Rough estimate
+                else:
+                    metrics['dependency_freshness_days'] = 0
+            
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️ Error collecting dependency metrics: {e}")
+        except Exception as e:
+            print(f"⚠️ Unexpected error in dependency metrics: {e}")
+        
+        return metrics
+    
+    def collect_code_quality_metrics(self) -> Dict[str, Any]:
+        """Collect code quality metrics."""
+        print("⚡ Collecting code quality metrics...")
+        
+        metrics = {}
+        
+        try:
+            # Run complexity analysis with radon
+            result = subprocess.run([
+                'python', '-c', '''
+import subprocess
+import sys
+try:
+    import radon.complexity as cc
+    import radon.raw as raw
+    from pathlib import Path
+    
+    total_complexity = 0
+    file_count = 0
+    total_loc = 0
+    
+    for py_file in Path("microdiff_matdesign").rglob("*.py"):
+        if "__pycache__" not in str(py_file):
             try:
-                with open(req_file, 'r') as f:
-                    deps = [line.strip() for line in f if line.strip() and not line.startswith('#')]
-                    deps_data["total"] = len(deps)
+                with open(py_file, "r") as f:
+                    code = f.read()
+                
+                # Complexity
+                complexity = cc.cc_visit(code)
+                for item in complexity:
+                    if hasattr(item, "complexity"):
+                        total_complexity += item.complexity
+                
+                # Lines of code
+                raw_metrics = raw.analyze(code)
+                total_loc += raw_metrics.loc
+                file_count += 1
             except Exception:
                 pass
+    
+    avg_complexity = total_complexity / max(file_count, 1)
+    print(f"complexity:{avg_complexity:.2f}")
+    print(f"loc:{total_loc}")
+    print(f"files:{file_count}")
+except ImportError:
+    print("radon not available")
+'''
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0 and 'radon not available' not in result.stdout:
+                for line in result.stdout.strip().split('\n'):
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        try:
+                            if key == 'complexity':
+                                metrics['average_complexity'] = float(value)
+                            elif key == 'loc':
+                                metrics['lines_of_code'] = int(value)
+                            elif key == 'files':
+                                metrics['python_files'] = int(value)
+                        except ValueError:
+                            pass
+            
+            # Check for TODO/FIXME comments
+            result = subprocess.run([
+                'grep', '-r', '--include=*.py', '-c', 'TODO\|FIXME\|XXX', 
+                'microdiff_matdesign/'
+            ], capture_output=True, text=True)
+            
+            todo_count = 0
+            if result.returncode == 0:
+                for line in result.stdout.strip().split('\n'):
+                    if ':' in line:
+                        try:
+                            count = int(line.split(':')[1])
+                            todo_count += count
+                        except (ValueError, IndexError):
+                            pass
+            
+            metrics['technical_debt_items'] = todo_count
+            
+        except Exception as e:
+            print(f"⚠️ Error collecting code quality metrics: {e}")
         
-        # Check pyproject.toml
-        pyproject_file = self.repo_path / "pyproject.toml"
-        if pyproject_file.exists():
+        return metrics
+    
+    def collect_build_metrics(self) -> Dict[str, Any]:
+        """Collect build and CI/CD metrics."""
+        print("🏗️ Collecting build metrics...")
+        
+        metrics = {}
+        
+        # These would typically come from CI/CD system APIs
+        # For now, we'll simulate or collect what we can
+        
+        try:
+            # Measure Docker build time
+            start_time = datetime.datetime.now()
+            result = subprocess.run([
+                'docker', 'build', '-t', 'microdiff-test', '.'
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                build_time = (datetime.datetime.now() - start_time).total_seconds()
+                metrics['docker_build_time'] = round(build_time, 2)
+            
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️ Error collecting build metrics: {e}")
+        except Exception as e:
+            print(f"⚠️ Unexpected error in build metrics: {e}")
+        
+        return metrics
+    
+    def update_metrics_config(self, collected_metrics: Dict[str, Any]) -> None:
+        """Update the metrics configuration with collected values."""
+        print("📝 Updating metrics configuration...")
+        
+        # Update current values in the metrics structure
+        for category in self.metrics_data.get('metrics', {}):
+            for subcategory in self.metrics_data['metrics'][category]:
+                for metric_name in self.metrics_data['metrics'][category][subcategory]:
+                    metric_config = self.metrics_data['metrics'][category][subcategory][metric_name]
+                    
+                    # Find matching collected metric
+                    if metric_name in collected_metrics:
+                        metric_config['current'] = collected_metrics[metric_name]
+                        metric_config['last_updated'] = datetime.datetime.utcnow().isoformat()
+        
+        # Update last updated timestamp
+        self.metrics_data['repository']['last_updated'] = datetime.datetime.utcnow().isoformat()
+        
+        # Save updated configuration
+        with open(self.config_path, 'w') as f:
+            json.dump(self.metrics_data, f, indent=2)
+    
+    def generate_report(self, output_format: str = 'json') -> str:
+        """Generate a metrics report."""
+        print("📋 Generating metrics report...")
+        
+        report_data = {
+            'timestamp': datetime.datetime.utcnow().isoformat(),
+            'collected_metrics': self.collected_metrics,
+            'summary': {
+                'total_metrics': len(self.collected_metrics),
+                'collection_duration': 'N/A'
+            }
+        }
+        
+        if output_format == 'json':
+            return json.dumps(report_data, indent=2)
+        elif output_format == 'markdown':
+            return self._generate_markdown_report(report_data)
+        else:
+            return str(report_data)
+    
+    def _generate_markdown_report(self, data: Dict[str, Any]) -> str:
+        """Generate a markdown formatted report."""
+        lines = [
+            "# 📊 Project Metrics Report",
+            "",
+            f"**Generated**: {data['timestamp']}",
+            f"**Total Metrics**: {data['summary']['total_metrics']}",
+            "",
+            "## Collected Metrics",
+            ""
+        ]
+        
+        for metric, value in data['collected_metrics'].items():
+            if isinstance(value, dict):
+                lines.append(f"### {metric.replace('_', ' ').title()}")
+                lines.append("")
+                for sub_metric, sub_value in value.items():
+                    lines.append(f"- **{sub_metric.replace('_', ' ').title()}**: {sub_value}")
+                lines.append("")
+            else:
+                lines.append(f"- **{metric.replace('_', ' ').title()}**: {value}")
+        
+        return '\n'.join(lines)
+    
+    def run_collection(self) -> Dict[str, Any]:
+        """Run the complete metrics collection process."""
+        print("🚀 Starting metrics collection...")
+        start_time = datetime.datetime.now()
+        
+        # Collect all metrics
+        collectors = [
+            ('git', self.collect_git_metrics),
+            ('test', self.collect_test_metrics),
+            ('security', self.collect_security_metrics),
+            ('dependency', self.collect_dependency_metrics),
+            ('code_quality', self.collect_code_quality_metrics),
+            ('build', self.collect_build_metrics),
+        ]
+        
+        for collector_name, collector_func in collectors:
             try:
-                with open(pyproject_file, 'r') as f:
-                    content = f.read()
-                    # Simple parsing for dependencies count
-                    if "dependencies" in content:
-                        deps_data["total"] = content.count('\n') // 10  # Rough estimate
-            except Exception:
-                pass
+                metrics = collector_func()
+                self.collected_metrics.update(metrics)
+                print(f"✅ {collector_name.title()} metrics collected")
+            except Exception as e:
+                print(f"❌ Failed to collect {collector_name} metrics: {e}")
         
-        return deps_data
-    
-    def _is_ignored_path(self, path: Path) -> bool:
-        """Check if path should be ignored in metrics."""
-        ignored_dirs = {".git", ".pytest_cache", "__pycache__", ".tox", "node_modules", ".venv", "venv"}
-        ignored_files = {".gitignore", ".DS_Store"}
+        collection_duration = (datetime.datetime.now() - start_time).total_seconds()
+        print(f"⏱️ Collection completed in {collection_duration:.2f} seconds")
         
-        # Check if any parent directory is ignored
-        for parent in path.parents:
-            if parent.name in ignored_dirs:
-                return True
-        
-        # Check if file itself is ignored
-        if path.name in ignored_files:
-            return True
-        
-        return False
-    
-    def save_metrics(self, output_file: Optional[str] = None) -> None:
-        """Save metrics to file."""
-        output_file = output_file or self.config.output_file
-        
-        if not output_file:
-            # Default output file
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = f"metrics_{timestamp}.json"
-        
-        output_path = Path(output_file)
-        
-        if self.config.output_format.lower() == "json":
-            with open(output_path, 'w') as f:
-                json.dump(self.metrics, f, indent=2)
-        elif self.config.output_format.lower() == "yaml":
-            with open(output_path, 'w') as f:
-                yaml.dump(self.metrics, f, default_flow_style=False)
-        
-        self.logger.info(f"Metrics saved to {output_path}")
-    
-    def print_summary(self) -> None:
-        """Print metrics summary."""
-        dev_metrics = self.metrics.get("metrics", {}).get("development", {})
-        quality_metrics = self.metrics.get("metrics", {}).get("code_quality", {})
-        community_metrics = self.metrics.get("metrics", {}).get("community", {})
-        
-        print("\n=== METRICS SUMMARY ===")
-        
-        if dev_metrics:
-            print(f"\nDevelopment:")
-            print(f"  Total commits: {dev_metrics.get('commits', {}).get('total', 'N/A')}")
-            print(f"  Monthly commits: {dev_metrics.get('commits', {}).get('last_month', 'N/A')}")
-            print(f"  Contributors: {len(dev_metrics.get('commits', {}).get('contributors', []))}")
-            print(f"  Total branches: {dev_metrics.get('branches', {}).get('total', 'N/A')}")
-        
-        if quality_metrics:
-            print(f"\nCode Quality:")
-            loc = quality_metrics.get('lines_of_code', {})
-            print(f"  Lines of code: {loc.get('total', 'N/A')}")
-            print(f"  Python LOC: {loc.get('python', 'N/A')}")
-            coverage = quality_metrics.get('test_coverage', {})
-            print(f"  Test coverage: {coverage.get('percentage', 'N/A')}%")
-        
-        if community_metrics:
-            github = community_metrics.get('github', {})
-            docs = community_metrics.get('documentation', {})
-            print(f"\nCommunity:")
-            print(f"  GitHub stars: {github.get('stars', 'N/A')}")
-            print(f"  Forks: {github.get('forks', 'N/A')}")
-            print(f"  Documentation pages: {docs.get('pages', 'N/A')}")
+        return self.collected_metrics
 
 
 def main():
-    """Main entry point."""
-    parser = argparse.ArgumentParser(description="Collect project metrics")
-    parser.add_argument("--github-token", help="GitHub API token")
-    parser.add_argument("--output", help="Output file path")
-    parser.add_argument("--format", choices=["json", "yaml"], default="json", help="Output format")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    parser.add_argument("--no-git", action="store_true", help="Skip Git metrics")
-    parser.add_argument("--no-quality", action="store_true", help="Skip code quality metrics")
-    parser.add_argument("--no-deps", action="store_true", help="Skip dependency metrics")
-    parser.add_argument("--summary", action="store_true", help="Print summary to console")
+    """Main function for the metrics collection script."""
+    parser = argparse.ArgumentParser(description='Collect project metrics')
+    parser.add_argument('--config', default='.github/project-metrics.json',
+                      help='Path to metrics configuration file')
+    parser.add_argument('--output', choices=['json', 'markdown'], default='json',
+                      help='Output format for the report')
+    parser.add_argument('--update-config', action='store_true',
+                      help='Update the metrics configuration with collected values')
+    parser.add_argument('--report-file', 
+                      help='Save report to file instead of printing to stdout')
     
     args = parser.parse_args()
     
-    config = MetricsConfig(
-        github_token=args.github_token or os.getenv("GITHUB_TOKEN"),
-        output_format=args.format,
-        output_file=args.output,
-        include_git_stats=not args.no_git,
-        include_code_quality=not args.no_quality,
-        include_dependencies=not args.no_deps,
-        verbose=args.verbose
-    )
-    
-    collector = MetricsCollector(config)
-    collector.collect_all_metrics()
-    
-    if args.output or config.output_file:
-        collector.save_metrics()
-    
-    if args.summary:
-        collector.print_summary()
-    
-    if not args.output and not config.output_file and not args.summary:
-        # Default: print JSON to stdout
-        print(json.dumps(collector.metrics, indent=2))
+    try:
+        collector = MetricsCollector(args.config)
+        collected_metrics = collector.run_collection()
+        
+        if args.update_config:
+            collector.update_metrics_config(collected_metrics)
+            print("✅ Metrics configuration updated")
+        
+        report = collector.generate_report(args.output)
+        
+        if args.report_file:
+            with open(args.report_file, 'w') as f:
+                f.write(report)
+            print(f"📄 Report saved to {args.report_file}")
+        else:
+            print("\n" + "="*50)
+            print("METRICS REPORT")
+            print("="*50)
+            print(report)
+        
+    except KeyboardInterrupt:
+        print("\n❌ Collection interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

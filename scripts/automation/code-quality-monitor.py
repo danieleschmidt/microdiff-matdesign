@@ -2,594 +2,578 @@
 """
 Code quality monitoring script for MicroDiff-MatDesign.
 
-This script monitors code quality metrics, runs static analysis tools,
-and generates reports on code health trends over time.
+This script monitors code quality metrics over time and generates reports
+to track improvements and identify areas needing attention.
 """
 
-import json
 import os
 import sys
+import json
 import subprocess
-import logging
-import argparse
-import tempfile
-from datetime import datetime, timezone
+import datetime
+import sqlite3
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
-from dataclasses import dataclass, asdict
-
-import requests
-
-
-@dataclass
-class QualityMetrics:
-    """Code quality metrics data structure."""
-    timestamp: str
-    commit_hash: str
-    lines_of_code: int
-    test_coverage: float
-    cyclomatic_complexity: float
-    maintainability_index: float
-    code_duplication: float
-    security_issues: int
-    lint_issues: int
-    type_errors: int
-    documentation_coverage: float
-
+from typing import Dict, List, Any, Optional, Tuple
+import argparse
 
 class CodeQualityMonitor:
-    """Code quality monitoring and analysis system."""
+    """Monitor and track code quality metrics over time."""
     
-    def __init__(self, project_root: Path, config: Dict[str, Any]):
-        self.project_root = project_root
-        self.config = config
-        self.logger = self._setup_logging()
-        self.metrics_history = []
-        self._load_metrics_history()
+    def __init__(self, project_root: str = ".", db_path: str = ".quality_metrics.db"):
+        self.project_root = Path(project_root).resolve()
+        self.db_path = self.project_root / db_path
+        self.init_database()
     
-    def _setup_logging(self) -> logging.Logger:
-        """Setup logging configuration."""
-        logging.basicConfig(
-            level=logging.DEBUG if self.config.get('verbose', False) else logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        return logging.getLogger(__name__)
-    
-    def _load_metrics_history(self) -> None:
-        """Load historical metrics data."""
-        history_file = self.project_root / ".code-quality-history.json"
-        if history_file.exists():
-            try:
-                with open(history_file, 'r') as f:
-                    self.metrics_history = json.load(f)
-                self.logger.info(f"Loaded {len(self.metrics_history)} historical metrics")
-            except Exception as e:
-                self.logger.error(f"Failed to load metrics history: {e}")
-                self.metrics_history = []
-    
-    def _save_metrics_history(self) -> None:
-        """Save metrics history to file."""
-        history_file = self.project_root / ".code-quality-history.json"
-        try:
-            with open(history_file, 'w') as f:
-                json.dump(self.metrics_history, f, indent=2)
-            self.logger.info("Metrics history saved")
-        except Exception as e:
-            self.logger.error(f"Failed to save metrics history: {e}")
-    
-    def collect_current_metrics(self) -> QualityMetrics:
-        """Collect current code quality metrics."""
-        self.logger.info("Collecting current code quality metrics")
+    def init_database(self) -> None:
+        """Initialize SQLite database for storing metrics."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
         
-        commit_hash = self._get_current_commit_hash()
-        timestamp = datetime.now(timezone.utc).isoformat()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS quality_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                commit_hash TEXT,
+                metric_name TEXT NOT NULL,
+                metric_value REAL NOT NULL,
+                metric_unit TEXT,
+                file_path TEXT,
+                details TEXT
+            )
+        ''')
         
-        # Collect various metrics
-        loc = self._count_lines_of_code()
-        coverage = self._get_test_coverage()
-        complexity = self._analyze_complexity()
-        duplication = self._check_code_duplication()
-        security = self._run_security_analysis()
-        lint = self._run_lint_analysis()
-        types = self._run_type_analysis()
-        docs = self._check_documentation_coverage()
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_timestamp ON quality_metrics(timestamp)
+        ''')
         
-        metrics = QualityMetrics(
-            timestamp=timestamp,
-            commit_hash=commit_hash,
-            lines_of_code=loc,
-            test_coverage=coverage,
-            cyclomatic_complexity=complexity[0],
-            maintainability_index=complexity[1],
-            code_duplication=duplication,
-            security_issues=security,
-            lint_issues=lint,
-            type_errors=types,
-            documentation_coverage=docs
-        )
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_metric_name ON quality_metrics(metric_name)
+        ''')
         
-        self.logger.info("Metrics collection completed")
-        return metrics
+        conn.commit()
+        conn.close()
     
-    def _get_current_commit_hash(self) -> str:
+    def get_current_commit(self) -> Optional[str]:
         """Get current git commit hash."""
         try:
-            result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                capture_output=True, text=True, cwd=self.project_root
-            )
-            return result.stdout.strip() if result.returncode == 0 else "unknown"
-        except Exception:
-            return "unknown"
-    
-    def _count_lines_of_code(self) -> int:
-        """Count total lines of code."""
-        total_lines = 0
-        
-        for file_path in self.project_root.rglob("*.py"):
-            if self._should_analyze_file(file_path):
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        lines = f.readlines()
-                        # Count non-empty, non-comment lines
-                        code_lines = [
-                            line.strip() for line in lines 
-                            if line.strip() and not line.strip().startswith('#')
-                        ]
-                        total_lines += len(code_lines)
-                except Exception:
-                    continue
-        
-        return total_lines
-    
-    def _get_test_coverage(self) -> float:
-        """Get test coverage percentage."""
-        try:
-            # Run pytest with coverage
             result = subprocess.run([
-                "python", "-m", "pytest", 
-                "--cov=microdiff_matdesign", 
-                "--cov-report=json",
-                "--quiet"
-            ], capture_output=True, text=True, cwd=self.project_root, timeout=300)
+                'git', 'rev-parse', 'HEAD'
+            ], capture_output=True, text=True, cwd=self.project_root)
             
-            # Read coverage.json
-            coverage_file = self.project_root / "coverage.json"
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
+        return None
+    
+    def collect_coverage_metrics(self) -> Dict[str, Any]:
+        """Collect test coverage metrics."""
+        print("📊 Collecting coverage metrics...")
+        
+        metrics = {}
+        
+        try:
+            # Run tests with coverage
+            result = subprocess.run([
+                'python', '-m', 'pytest', 'tests/',
+                '--cov=microdiff_matdesign',
+                '--cov-report=json',
+                '--cov-report=term',
+                '--quiet'
+            ], capture_output=True, text=True, cwd=self.project_root)
+            
+            # Parse coverage JSON report
+            coverage_file = self.project_root / 'coverage.json'
             if coverage_file.exists():
                 with open(coverage_file, 'r') as f:
                     coverage_data = json.load(f)
-                return coverage_data.get("totals", {}).get("percent_covered", 0.0)
-        except Exception as e:
-            self.logger.warning(f"Could not get test coverage: {e}")
-        
-        return 0.0
-    
-    def _analyze_complexity(self) -> Tuple[float, float]:
-        """Analyze code complexity and maintainability."""
-        try:
-            # Try to use radon for complexity analysis
-            result = subprocess.run([
-                "radon", "cc", str(self.project_root / "microdiff_matdesign"),
-                "--json"
-            ], capture_output=True, text=True)
+                
+                # Overall coverage
+                metrics['overall_coverage'] = coverage_data['totals']['percent_covered']
+                metrics['lines_covered'] = coverage_data['totals']['covered_lines']
+                metrics['total_lines'] = coverage_data['totals']['num_statements']
+                metrics['missing_lines'] = coverage_data['totals']['missing_lines']
+                
+                # Per-file coverage
+                file_coverage = {}
+                for file_path, file_data in coverage_data['files'].items():
+                    if 'microdiff_matdesign' in file_path:
+                        file_coverage[file_path] = {
+                            'coverage': file_data['summary']['percent_covered'],
+                            'lines_covered': file_data['summary']['covered_lines'],
+                            'total_lines': file_data['summary']['num_statements']
+                        }
+                
+                metrics['file_coverage'] = file_coverage
+                
+                # Clean up
+                coverage_file.unlink()
             
-            if result.returncode == 0:
+        except Exception as e:
+            print(f"⚠️ Error collecting coverage metrics: {e}")
+        
+        return metrics
+    
+    def collect_complexity_metrics(self) -> Dict[str, Any]:
+        """Collect code complexity metrics using radon."""
+        print("🧮 Collecting complexity metrics...")
+        
+        metrics = {}
+        
+        try:
+            # Install radon if not available
+            try:
+                import radon
+            except ImportError:
+                subprocess.run([
+                    'pip', 'install', 'radon'
+                ], check=True, capture_output=True)
+            
+            # Run radon for cyclomatic complexity
+            result = subprocess.run([
+                'python', '-m', 'radon', 'cc', 'microdiff_matdesign',
+                '--json'
+            ], capture_output=True, text=True, cwd=self.project_root)
+            
+            if result.returncode == 0 and result.stdout:
                 complexity_data = json.loads(result.stdout)
                 
-                # Calculate average complexity
                 total_complexity = 0
                 function_count = 0
+                file_complexities = {}
                 
-                for file_data in complexity_data.values():
-                    for item in file_data:
-                        if item.get("type") == "function":
-                            total_complexity += item.get("complexity", 0)
+                for file_path, functions in complexity_data.items():
+                    file_complexity = 0
+                    file_functions = 0
+                    
+                    for func in functions:
+                        if isinstance(func, dict) and 'complexity' in func:
+                            complexity = func['complexity']
+                            total_complexity += complexity
+                            file_complexity += complexity
                             function_count += 1
+                            file_functions += 1
+                    
+                    if file_functions > 0:
+                        file_complexities[file_path] = {
+                            'average_complexity': file_complexity / file_functions,
+                            'total_complexity': file_complexity,
+                            'function_count': file_functions
+                        }
                 
-                avg_complexity = total_complexity / function_count if function_count > 0 else 0
-                
-                # Get maintainability index
-                mi_result = subprocess.run([
-                    "radon", "mi", str(self.project_root / "microdiff_matdesign"),
-                    "--json"
-                ], capture_output=True, text=True)
-                
-                maintainability = 0.0
-                if mi_result.returncode == 0:
-                    mi_data = json.loads(mi_result.stdout)
-                    mi_scores = [data.get("mi", 0) for data in mi_data.values()]
-                    maintainability = sum(mi_scores) / len(mi_scores) if mi_scores else 0
-                
-                return avg_complexity, maintainability
-                
-        except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError) as e:
-            self.logger.warning(f"Could not analyze complexity: {e}")
-        
-        return 0.0, 0.0
-    
-    def _check_code_duplication(self) -> float:
-        """Check for code duplication."""
-        try:
-            # Simple duplication check using file comparison
-            python_files = list(self.project_root.rglob("*.py"))
-            python_files = [f for f in python_files if self._should_analyze_file(f)]
+                metrics['average_complexity'] = total_complexity / max(function_count, 1)
+                metrics['total_complexity'] = total_complexity
+                metrics['function_count'] = function_count
+                metrics['file_complexities'] = file_complexities
             
-            total_lines = 0
-            duplicate_lines = 0
+            # Run radon for maintainability index
+            result = subprocess.run([
+                'python', '-m', 'radon', 'mi', 'microdiff_matdesign',
+                '--json'
+            ], capture_output=True, text=True, cwd=self.project_root)
             
-            for file_path in python_files:
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        lines = f.readlines()
-                        total_lines += len(lines)
-                        
-                        # Simple duplicate detection (identical lines)
-                        line_counts = {}
-                        for line in lines:
-                            stripped = line.strip()
-                            if stripped and not stripped.startswith('#'):
-                                line_counts[stripped] = line_counts.get(stripped, 0) + 1
-                        
-                        for count in line_counts.values():
-                            if count > 1:
-                                duplicate_lines += count - 1
-                                
-                except Exception:
-                    continue
-            
-            return (duplicate_lines / total_lines * 100) if total_lines > 0 else 0.0
+            if result.returncode == 0 and result.stdout:
+                mi_data = json.loads(result.stdout)
+                
+                mi_scores = []
+                file_mi_scores = {}
+                
+                for file_path, mi_score in mi_data.items():
+                    if isinstance(mi_score, (int, float)):
+                        mi_scores.append(mi_score)
+                        file_mi_scores[file_path] = mi_score
+                
+                if mi_scores:
+                    metrics['average_maintainability'] = sum(mi_scores) / len(mi_scores)
+                    metrics['file_maintainability'] = file_mi_scores
             
         except Exception as e:
-            self.logger.warning(f"Could not check code duplication: {e}")
+            print(f"⚠️ Error collecting complexity metrics: {e}")
         
-        return 0.0
+        return metrics
     
-    def _run_security_analysis(self) -> int:
-        """Run security analysis and count issues."""
-        issues = 0
+    def collect_duplication_metrics(self) -> Dict[str, Any]:
+        """Collect code duplication metrics."""
+        print("🔍 Collecting duplication metrics...")
+        
+        metrics = {}
         
         try:
-            # Run bandit security analysis
-            result = subprocess.run([
-                "bandit", "-r", str(self.project_root / "microdiff_matdesign"),
-                "-f", "json"
-            ], capture_output=True, text=True)
+            # Use simple line-based duplication detection
+            # In practice, you might want to use tools like jscpd or sonar
             
-            if result.stdout:
-                bandit_data = json.loads(result.stdout)
-                issues += len(bandit_data.get("results", []))
-                
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            self.logger.warning(f"Could not run bandit: {e}")
+            file_lines = {}
+            total_lines = 0
+            
+            # Read all Python files
+            for py_file in self.project_root.rglob('microdiff_matdesign/**/*.py'):
+                if '__pycache__' not in str(py_file):
+                    try:
+                        with open(py_file, 'r', encoding='utf-8') as f:
+                            lines = [line.strip() for line in f.readlines() 
+                                   if line.strip() and not line.strip().startswith('#')]
+                            file_lines[str(py_file)] = lines
+                            total_lines += len(lines)
+                    except Exception:
+                        pass
+            
+            # Find duplicate lines
+            line_counts = {}
+            for file_path, lines in file_lines.items():
+                for line in lines:
+                    if len(line) > 20:  # Only check substantial lines
+                        line_counts[line] = line_counts.get(line, 0) + 1
+            
+            duplicate_lines = sum(count - 1 for count in line_counts.values() if count > 1)
+            duplication_ratio = (duplicate_lines / max(total_lines, 1)) * 100
+            
+            metrics['duplicate_lines'] = duplicate_lines
+            metrics['total_lines'] = total_lines
+            metrics['duplication_percentage'] = duplication_ratio
+            
+        except Exception as e:
+            print(f"⚠️ Error collecting duplication metrics: {e}")
+        
+        return metrics
+    
+    def collect_documentation_metrics(self) -> Dict[str, Any]:
+        """Collect documentation coverage metrics."""
+        print("📚 Collecting documentation metrics...")
+        
+        metrics = {}
         
         try:
-            # Run safety check
+            # Use interrogate for docstring coverage
             result = subprocess.run([
-                "safety", "check", "--json"
+                'python', '-c', '''
+import subprocess
+import sys
+try:
+    result = subprocess.run([
+        "python", "-m", "interrogate", "microdiff_matdesign",
+        "--quiet", "--verbose"
+    ], capture_output=True, text=True)
+    
+    output = result.stdout
+    for line in output.split("\\n"):
+        if "TOTAL" in line and "%" in line:
+            parts = line.split()
+            for i, part in enumerate(parts):
+                if "%" in part:
+                    coverage = float(part.replace("%", ""))
+                    print(f"docstring_coverage:{coverage}")
+                    break
+except ImportError:
+    print("interrogate not available")
+except Exception as e:
+    print(f"error:{e}")
+'''
+            ], capture_output=True, text=True, cwd=self.project_root)
+            
+            if result.returncode == 0:
+                for line in result.stdout.strip().split('\n'):
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        if key == 'docstring_coverage':
+                            metrics['docstring_coverage'] = float(value)
+            
+            # Count documentation files
+            doc_files = list(self.project_root.rglob('docs/**/*.md'))
+            doc_files.extend(self.project_root.rglob('*.md'))
+            
+            metrics['documentation_files'] = len(doc_files)
+            
+            # Check if key documentation exists
+            key_docs = ['README.md', 'CONTRIBUTING.md', 'docs/']
+            existing_docs = []
+            for doc in key_docs:
+                if (self.project_root / doc).exists():
+                    existing_docs.append(doc)
+            
+            metrics['key_documentation_present'] = len(existing_docs)
+            metrics['key_documentation_total'] = len(key_docs)
+            
+        except Exception as e:
+            print(f"⚠️ Error collecting documentation metrics: {e}")
+        
+        return metrics
+    
+    def collect_security_metrics(self) -> Dict[str, Any]:
+        """Collect security-related metrics."""
+        print("🔒 Collecting security metrics...")
+        
+        metrics = {}
+        
+        try:
+            # Run bandit security scan
+            result = subprocess.run([
+                'python', '-m', 'bandit', '-r', 'microdiff_matdesign',
+                '-f', 'json'
             ], capture_output=True, text=True, cwd=self.project_root)
             
             if result.stdout:
-                safety_data = json.loads(result.stdout)
-                issues += len(safety_data)
-                
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            self.logger.warning(f"Could not run safety check: {e}")
-        
-        return issues
-    
-    def _run_lint_analysis(self) -> int:
-        """Run linting and count issues."""
-        try:
-            # Run flake8
-            result = subprocess.run([
-                "flake8", str(self.project_root / "microdiff_matdesign"),
-                "--format=json"
-            ], capture_output=True, text=True)
-            
-            if result.stdout:
                 try:
-                    lint_data = json.loads(result.stdout)
-                    return len(lint_data)
+                    bandit_data = json.loads(result.stdout)
+                    
+                    issue_counts = {'high': 0, 'medium': 0, 'low': 0}
+                    for issue in bandit_data.get('results', []):
+                        severity = issue.get('issue_severity', '').lower()
+                        if severity in issue_counts:
+                            issue_counts[severity] += 1
+                    
+                    metrics['security_issues_high'] = issue_counts['high']
+                    metrics['security_issues_medium'] = issue_counts['medium']
+                    metrics['security_issues_low'] = issue_counts['low']
+                    metrics['security_issues_total'] = sum(issue_counts.values())
+                    
                 except json.JSONDecodeError:
-                    # Count lines of output as issues
-                    return len(result.stdout.strip().split('\n')) if result.stdout.strip() else 0
+                    pass
             
-        except FileNotFoundError:
-            self.logger.warning("flake8 not available")
-        
-        return 0
-    
-    def _run_type_analysis(self) -> int:
-        """Run type checking and count errors."""
-        try:
-            # Run mypy
-            result = subprocess.run([
-                "mypy", str(self.project_root / "microdiff_matdesign"),
-                "--show-error-codes"
-            ], capture_output=True, text=True)
+            # Check for hardcoded secrets (simple patterns)
+            secret_patterns = [
+                r'password\s*=\s*["\'][^"\']{8,}["\']',
+                r'secret\s*=\s*["\'][^"\']{8,}["\']',
+                r'api_key\s*=\s*["\'][^"\']{8,}["\']',
+                r'token\s*=\s*["\'][^"\']{8,}["\']'
+            ]
             
-            if result.stdout:
-                # Count error lines
-                error_lines = [
-                    line for line in result.stdout.split('\n') 
-                    if 'error:' in line.lower()
-                ]
-                return len(error_lines)
+            potential_secrets = 0
+            for py_file in self.project_root.rglob('microdiff_matdesign/**/*.py'):
+                if '__pycache__' not in str(py_file):
+                    try:
+                        with open(py_file, 'r') as f:
+                            content = f.read()
+                            for pattern in secret_patterns:
+                                import re
+                                matches = re.findall(pattern, content, re.IGNORECASE)
+                                potential_secrets += len(matches)
+                    except Exception:
+                        pass
             
-        except FileNotFoundError:
-            self.logger.warning("mypy not available")
-        
-        return 0
-    
-    def _check_documentation_coverage(self) -> float:
-        """Check documentation coverage."""
-        try:
-            python_files = list(self.project_root.rglob("*.py"))
-            python_files = [f for f in python_files if self._should_analyze_file(f)]
-            
-            total_functions = 0
-            documented_functions = 0
-            
-            for file_path in python_files:
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                        
-                    # Simple docstring detection
-                    lines = content.split('\n')
-                    for i, line in enumerate(lines):
-                        if line.strip().startswith('def ') and not line.strip().startswith('def _'):
-                            total_functions += 1
-                            
-                            # Check if next few lines contain docstring
-                            for j in range(i + 1, min(i + 5, len(lines))):
-                                if '"""' in lines[j] or "'''" in lines[j]:
-                                    documented_functions += 1
-                                    break
-                                elif lines[j].strip() and not lines[j].strip().startswith('#'):
-                                    break
-                                    
-                except Exception:
-                    continue
-            
-            return (documented_functions / total_functions * 100) if total_functions > 0 else 0.0
+            metrics['potential_secrets'] = potential_secrets
             
         except Exception as e:
-            self.logger.warning(f"Could not check documentation coverage: {e}")
+            print(f"⚠️ Error collecting security metrics: {e}")
         
-        return 0.0
+        return metrics
     
-    def _should_analyze_file(self, file_path: Path) -> bool:
-        """Check if file should be included in analysis."""
-        excluded_dirs = {'.git', '__pycache__', '.pytest_cache', '.tox', 'venv', '.venv'}
-        excluded_files = {'__init__.py'}
+    def store_metrics(self, metrics: Dict[str, Any], commit_hash: Optional[str] = None) -> None:
+        """Store collected metrics in the database."""
+        print("💾 Storing metrics in database...")
         
-        # Check if any parent directory is excluded
-        for parent in file_path.parents:
-            if parent.name in excluded_dirs:
-                return False
+        timestamp = datetime.datetime.utcnow().isoformat()
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
         
-        # Check if file is excluded
-        if file_path.name in excluded_files:
-            return False
+        def store_metric(name: str, value: float, unit: str = '', file_path: str = '', details: str = ''):
+            cursor.execute('''
+                INSERT INTO quality_metrics 
+                (timestamp, commit_hash, metric_name, metric_value, metric_unit, file_path, details)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (timestamp, commit_hash, name, value, unit, file_path, details))
         
-        # Must be under the main package
-        try:
-            file_path.relative_to(self.project_root / "microdiff_matdesign")
-            return True
-        except ValueError:
-            # Also include test files
-            try:
-                file_path.relative_to(self.project_root / "tests")
-                return True
-            except ValueError:
-                return False
+        # Store top-level metrics
+        for metric_name, metric_value in metrics.items():
+            if isinstance(metric_value, (int, float)):
+                unit = 'percentage' if 'coverage' in metric_name or 'percentage' in metric_name else 'count'
+                store_metric(metric_name, metric_value, unit)
+            elif isinstance(metric_value, dict):
+                # Store nested metrics (like per-file data)
+                for sub_key, sub_value in metric_value.items():
+                    if isinstance(sub_value, (int, float)):
+                        store_metric(f"{metric_name}_{sub_key}", sub_value, '', sub_key)
+                    elif isinstance(sub_value, dict):
+                        # Handle deeply nested data
+                        for deep_key, deep_value in sub_value.items():
+                            if isinstance(deep_value, (int, float)):
+                                store_metric(
+                                    f"{metric_name}_{deep_key}", 
+                                    deep_value, 
+                                    '', 
+                                    sub_key, 
+                                    json.dumps(sub_value)
+                                )
+        
+        conn.commit()
+        conn.close()
     
-    def analyze_trends(self) -> Dict[str, Any]:
-        """Analyze quality trends over time."""
-        if len(self.metrics_history) < 2:
-            return {"error": "Not enough historical data for trend analysis"}
+    def get_historical_data(self, metric_name: str, days: int = 30) -> List[Tuple[str, float]]:
+        """Get historical data for a specific metric."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
         
-        # Get recent metrics
-        recent_metrics = self.metrics_history[-5:]  # Last 5 measurements
+        cutoff_date = (datetime.datetime.utcnow() - datetime.timedelta(days=days)).isoformat()
         
-        trends = {}
+        cursor.execute('''
+            SELECT timestamp, metric_value 
+            FROM quality_metrics 
+            WHERE metric_name = ? AND timestamp > ?
+            ORDER BY timestamp
+        ''', (metric_name, cutoff_date))
         
-        # Calculate trends for each metric
-        for metric_name in ["test_coverage", "cyclomatic_complexity", "security_issues", "lint_issues"]:
-            values = [m.get(metric_name, 0) for m in recent_metrics]
-            if len(values) >= 2:
-                trend = "improving" if values[-1] < values[0] else "declining" if values[-1] > values[0] else "stable"
-                change = values[-1] - values[0]
-                trends[metric_name] = {
-                    "trend": trend,
-                    "change": change,
-                    "current": values[-1],
-                    "previous": values[0]
-                }
+        results = cursor.fetchall()
+        conn.close()
         
-        return trends
+        return results
     
-    def generate_report(self, current_metrics: QualityMetrics) -> Dict[str, Any]:
-        """Generate comprehensive quality report."""
-        trends = self.analyze_trends()
+    def generate_trend_report(self, days: int = 30) -> Dict[str, Any]:
+        """Generate a trend report for key metrics."""
+        print(f"📈 Generating trend report for last {days} days...")
         
-        # Quality score calculation
-        quality_score = self._calculate_quality_score(current_metrics)
+        key_metrics = [
+            'overall_coverage',
+            'average_complexity',
+            'average_maintainability',
+            'duplication_percentage',
+            'docstring_coverage',
+            'security_issues_total'
+        ]
         
-        # Recommendations
-        recommendations = self._generate_recommendations(current_metrics)
-        
-        report = {
-            "timestamp": current_metrics.timestamp,
-            "commit_hash": current_metrics.commit_hash,
-            "quality_score": quality_score,
-            "current_metrics": asdict(current_metrics),
-            "trends": trends,
-            "recommendations": recommendations,
-            "summary": {
-                "lines_of_code": current_metrics.lines_of_code,
-                "test_coverage": f"{current_metrics.test_coverage:.1f}%",
-                "complexity": f"{current_metrics.cyclomatic_complexity:.1f}",
-                "security_issues": current_metrics.security_issues,
-                "overall_health": self._get_health_status(quality_score)
-            }
+        trend_report = {
+            'period_days': days,
+            'generated_at': datetime.datetime.utcnow().isoformat(),
+            'metrics': {}
         }
         
-        return report
+        for metric in key_metrics:
+            historical_data = self.get_historical_data(metric, days)
+            
+            if len(historical_data) >= 2:
+                # Calculate trend
+                first_value = historical_data[0][1]
+                last_value = historical_data[-1][1]
+                
+                if first_value != 0:
+                    trend_percentage = ((last_value - first_value) / first_value) * 100
+                else:
+                    trend_percentage = 0
+                
+                trend_report['metrics'][metric] = {
+                    'first_value': first_value,
+                    'last_value': last_value,
+                    'trend_percentage': round(trend_percentage, 2),
+                    'data_points': len(historical_data),
+                    'trend_direction': 'improving' if trend_percentage > 0 else 'declining' if trend_percentage < 0 else 'stable'
+                }
+            else:
+                trend_report['metrics'][metric] = {
+                    'status': 'insufficient_data',
+                    'data_points': len(historical_data)
+                }
+        
+        return trend_report
     
-    def _calculate_quality_score(self, metrics: QualityMetrics) -> float:
-        """Calculate overall quality score (0-100)."""
-        # Weighted scoring
-        coverage_score = min(metrics.test_coverage, 100)
-        complexity_score = max(0, 100 - (metrics.cyclomatic_complexity - 1) * 10)
-        security_score = max(0, 100 - metrics.security_issues * 20)
-        lint_score = max(0, 100 - metrics.lint_issues * 2)
-        type_score = max(0, 100 - metrics.type_errors * 5)
-        docs_score = min(metrics.documentation_coverage, 100)
+    def run_quality_check(self) -> Dict[str, Any]:
+        """Run complete quality check and return all metrics."""
+        print("🔍 Running comprehensive code quality check...")
         
-        # Weighted average
-        total_score = (
-            coverage_score * 0.25 +
-            complexity_score * 0.15 +
-            security_score * 0.25 +
-            lint_score * 0.15 +
-            type_score * 0.10 +
-            docs_score * 0.10
-        )
+        commit_hash = self.get_current_commit()
+        all_metrics = {}
         
-        return round(total_score, 1)
-    
-    def _get_health_status(self, score: float) -> str:
-        """Get health status based on quality score."""
-        if score >= 90:
-            return "excellent"
-        elif score >= 80:
-            return "good"
-        elif score >= 70:
-            return "fair"
-        elif score >= 60:
-            return "poor"
-        else:
-            return "critical"
-    
-    def _generate_recommendations(self, metrics: QualityMetrics) -> List[str]:
-        """Generate improvement recommendations."""
-        recommendations = []
+        # Collect all metrics
+        collectors = [
+            ('coverage', self.collect_coverage_metrics),
+            ('complexity', self.collect_complexity_metrics),
+            ('duplication', self.collect_duplication_metrics),
+            ('documentation', self.collect_documentation_metrics),
+            ('security', self.collect_security_metrics),
+        ]
         
-        if metrics.test_coverage < 80:
-            recommendations.append(f"Increase test coverage from {metrics.test_coverage:.1f}% to at least 80%")
+        for collector_name, collector_func in collectors:
+            try:
+                metrics = collector_func()
+                all_metrics.update(metrics)
+                print(f"✅ {collector_name.title()} metrics collected")
+            except Exception as e:
+                print(f"❌ Failed to collect {collector_name} metrics: {e}")
         
-        if metrics.cyclomatic_complexity > 10:
-            recommendations.append(f"Reduce cyclomatic complexity from {metrics.cyclomatic_complexity:.1f} to below 10")
+        # Store metrics
+        self.store_metrics(all_metrics, commit_hash)
         
-        if metrics.security_issues > 0:
-            recommendations.append(f"Fix {metrics.security_issues} security issues")
-        
-        if metrics.lint_issues > 20:
-            recommendations.append(f"Address {metrics.lint_issues} linting issues")
-        
-        if metrics.type_errors > 0:
-            recommendations.append(f"Fix {metrics.type_errors} type checking errors")
-        
-        if metrics.documentation_coverage < 70:
-            recommendations.append(f"Improve documentation coverage from {metrics.documentation_coverage:.1f}% to at least 70%")
-        
-        if metrics.code_duplication > 5:
-            recommendations.append(f"Reduce code duplication from {metrics.code_duplication:.1f}% to below 5%")
-        
-        if not recommendations:
-            recommendations.append("Code quality is excellent! Keep up the good work.")
-        
-        return recommendations
-    
-    def save_report(self, report: Dict[str, Any], output_file: Optional[str] = None) -> None:
-        """Save quality report to file."""
-        if not output_file:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = f"quality_report_{timestamp}.json"
-        
-        output_path = Path(output_file)
-        
-        with open(output_path, 'w') as f:
-            json.dump(report, f, indent=2)
-        
-        self.logger.info(f"Quality report saved to {output_path}")
-    
-    def update_metrics_history(self, metrics: QualityMetrics) -> None:
-        """Update metrics history with new data."""
-        self.metrics_history.append(asdict(metrics))
-        
-        # Keep only last 100 entries
-        if len(self.metrics_history) > 100:
-            self.metrics_history = self.metrics_history[-100:]
-        
-        self._save_metrics_history()
-    
-    def print_summary(self, report: Dict[str, Any]) -> None:
-        """Print quality report summary."""
-        print("\n=== CODE QUALITY REPORT ===")
-        print(f"Timestamp: {report['timestamp']}")
-        print(f"Commit: {report['commit_hash'][:8]}")
-        print(f"Quality Score: {report['quality_score']}/100 ({report['summary']['overall_health'].upper()})")
-        
-        print(f"\n=== METRICS ===")
-        summary = report['summary']
-        print(f"Lines of Code: {summary['lines_of_code']:,}")
-        print(f"Test Coverage: {summary['test_coverage']}")
-        print(f"Complexity: {summary['complexity']}")
-        print(f"Security Issues: {summary['security_issues']}")
-        
-        if report['recommendations']:
-            print(f"\n=== RECOMMENDATIONS ===")
-            for i, rec in enumerate(report['recommendations'], 1):
-                print(f"{i}. {rec}")
-        
-        if report['trends'] and 'error' not in report['trends']:
-            print(f"\n=== TRENDS ===")
-            for metric, trend_data in report['trends'].items():
-                trend_icon = "📈" if trend_data['trend'] == 'improving' else "📉" if trend_data['trend'] == 'declining' else "➡️"
-                print(f"{metric}: {trend_icon} {trend_data['trend']} (Δ {trend_data['change']:+.1f})")
+        return all_metrics
 
 
 def main():
-    """Main entry point."""
-    parser = argparse.ArgumentParser(description="Monitor code quality metrics")
-    parser.add_argument("--output", help="Output file for report")
-    parser.add_argument("--format", choices=["json", "summary"], default="summary", help="Output format")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    parser.add_argument("--no-history", action="store_true", help="Don't update metrics history")
+    """Main function for the code quality monitor."""
+    parser = argparse.ArgumentParser(description='Code quality monitoring')
+    parser.add_argument('--project-root', default='.', 
+                      help='Project root directory')
+    parser.add_argument('--db-path', default='.quality_metrics.db',
+                      help='Database file path')
+    parser.add_argument('--trend-days', type=int, default=30,
+                      help='Days to include in trend report')
+    parser.add_argument('--output-format', choices=['json', 'markdown'], default='json',
+                      help='Output format')
+    parser.add_argument('--report-file',
+                      help='Save report to file')
     
     args = parser.parse_args()
     
-    config = {
-        "verbose": args.verbose,
-        "output_format": args.format,
-        "update_history": not args.no_history
-    }
-    
-    project_root = Path.cwd()
-    monitor = CodeQualityMonitor(project_root, config)
-    
-    # Collect current metrics
-    current_metrics = monitor.collect_current_metrics()
-    
-    # Generate report
-    report = monitor.generate_report(current_metrics)
-    
-    # Update history
-    if config["update_history"]:
-        monitor.update_metrics_history(current_metrics)
-    
-    # Output results
-    if args.output:
-        monitor.save_report(report, args.output)
-    
-    if args.format == "summary":
-        monitor.print_summary(report)
-    else:
-        print(json.dumps(report, indent=2))
+    try:
+        monitor = CodeQualityMonitor(args.project_root, args.db_path)
+        
+        # Run quality check
+        metrics = monitor.run_quality_check()
+        
+        # Generate trend report
+        trend_report = monitor.generate_trend_report(args.trend_days)
+        
+        # Combine reports
+        full_report = {
+            'current_metrics': metrics,
+            'trend_analysis': trend_report,
+            'timestamp': datetime.datetime.utcnow().isoformat()
+        }
+        
+        # Output report
+        if args.output_format == 'json':
+            output = json.dumps(full_report, indent=2)
+        else:
+            # Generate markdown report
+            lines = [
+                "# 📊 Code Quality Report",
+                "",
+                f"**Generated**: {full_report['timestamp']}",
+                "",
+                "## Current Metrics",
+                ""
+            ]
+            
+            for metric, value in metrics.items():
+                if isinstance(value, (int, float)):
+                    lines.append(f"- **{metric.replace('_', ' ').title()}**: {value}")
+            
+            lines.extend([
+                "",
+                "## Trend Analysis",
+                ""
+            ])
+            
+            for metric, trend_data in trend_report['metrics'].items():
+                if 'trend_percentage' in trend_data:
+                    direction = trend_data['trend_direction']
+                    percentage = trend_data['trend_percentage']
+                    lines.append(f"- **{metric.replace('_', ' ').title()}**: {direction} ({percentage:+.1f}%)")
+            
+            output = '\n'.join(lines)
+        
+        if args.report_file:
+            with open(args.report_file, 'w') as f:
+                f.write(output)
+            print(f"📄 Quality report saved to {args.report_file}")
+        else:
+            print("\n" + "="*60)
+            print("QUALITY REPORT")
+            print("="*60)
+            print(output)
+        
+    except KeyboardInterrupt:
+        print("\n❌ Quality check interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -1,300 +1,362 @@
 {
-  "project": {
-    "name": "MicroDiff-MatDesign",
-    "version": "1.0.0",
+  "repository": {
+    "name": "microdiff-matdesign",
     "description": "Diffusion model framework for inverse material design",
-    "repository": "danieleschmidt/microdiff-matdesign",
-    "last_updated": "2024-08-02T00:00:00Z"
+    "metrics_collection_version": "1.0.0",
+    "last_updated": "2024-02-01T00:00:00Z"
   },
-  
   "metrics": {
-    
     "development": {
-      "commits": {
-        "total": 0,
-        "last_month": 0,
-        "avg_per_week": 0,
-        "contributors": []
-      },
-      "pull_requests": {
-        "total": 0,
-        "open": 0,
-        "merged": 0,
-        "closed": 0,
-        "avg_time_to_merge_hours": 0
-      },
-      "issues": {
-        "total": 0,
-        "open": 0,
-        "closed": 0,
-        "avg_time_to_close_hours": 0,
-        "labels": {
-          "bug": 0,
-          "enhancement": 0,
-          "documentation": 0,
-          "question": 0
+      "code_quality": {
+        "test_coverage": {
+          "target": 85,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "percentage",
+          "collection_frequency": "per_commit"
+        },
+        "code_complexity": {
+          "target": 10,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "cyclomatic_complexity",
+          "collection_frequency": "per_commit"
+        },
+        "technical_debt": {
+          "target": 5,
+          "current": 0,
+          "trend": "decreasing",
+          "measurement_unit": "hours",
+          "collection_frequency": "weekly"
+        },
+        "documentation_coverage": {
+          "target": 80,
+          "current": 0,
+          "trend": "increasing",
+          "measurement_unit": "percentage",
+          "collection_frequency": "per_commit"
         }
-      },
-      "branches": {
-        "total": 0,
-        "active": 0,
-        "stale": 0
-      },
-      "releases": {
-        "total": 0,
-        "latest": null,
-        "avg_time_between_releases_days": 0
-      }
-    },
-    
-    "code_quality": {
-      "lines_of_code": {
-        "total": 0,
-        "python": 0,
-        "yaml": 0,
-        "markdown": 0,
-        "dockerfile": 0
-      },
-      "test_coverage": {
-        "percentage": 0,
-        "lines_covered": 0,
-        "lines_total": 0,
-        "missing_coverage": []
-      },
-      "complexity": {
-        "cyclomatic_complexity": 0,
-        "maintainability_index": 0,
-        "functions_over_threshold": 0
-      },
-      "code_duplication": {
-        "percentage": 0,
-        "duplicated_lines": 0,
-        "duplicated_blocks": 0
       },
       "security": {
         "vulnerabilities": {
-          "critical": 0,
-          "high": 0,
-          "medium": 0,
-          "low": 0
+          "critical": {
+            "target": 0,
+            "current": 0,
+            "trend": "stable",
+            "measurement_unit": "count",
+            "collection_frequency": "daily"
+          },
+          "high": {
+            "target": 0,
+            "current": 0,
+            "trend": "stable",
+            "measurement_unit": "count",
+            "collection_frequency": "daily"
+          },
+          "medium": {
+            "target": 2,
+            "current": 0,
+            "trend": "stable",
+            "measurement_unit": "count",
+            "collection_frequency": "daily"
+          },
+          "low": {
+            "target": 10,
+            "current": 0,
+            "trend": "stable",
+            "measurement_unit": "count",
+            "collection_frequency": "daily"
+          }
         },
-        "last_scan_date": null,
-        "security_score": 0
+        "dependency_freshness": {
+          "target": 30,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "days_outdated",
+          "collection_frequency": "weekly"
+        }
       },
-      "dependencies": {
-        "total": 0,
-        "outdated": 0,
-        "security_issues": 0,
-        "licenses": {}
+      "performance": {
+        "build_time": {
+          "target": 300,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "seconds",
+          "collection_frequency": "per_build"
+        },
+        "test_execution_time": {
+          "target": 120,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "seconds",
+          "collection_frequency": "per_test_run"
+        },
+        "model_inference_latency": {
+          "target": 2.0,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "seconds",
+          "collection_frequency": "per_inference"
+        }
       }
     },
-    
-    "ci_cd": {
-      "builds": {
-        "total": 0,
-        "successful": 0,
-        "failed": 0,
-        "success_rate": 0,
-        "avg_duration_minutes": 0
+    "operations": {
+      "reliability": {
+        "uptime": {
+          "target": 99.9,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "percentage",
+          "collection_frequency": "continuous"
+        },
+        "error_rate": {
+          "target": 0.1,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "percentage",
+          "collection_frequency": "continuous"
+        },
+        "mean_time_to_recovery": {
+          "target": 15,
+          "current": 0,
+          "trend": "decreasing",
+          "measurement_unit": "minutes",
+          "collection_frequency": "per_incident"
+        }
       },
-      "deployments": {
-        "total": 0,
-        "successful": 0,
-        "failed": 0,
-        "rollbacks": 0,
-        "avg_duration_minutes": 0
+      "deployment": {
+        "deployment_frequency": {
+          "target": 10,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "deployments_per_week",
+          "collection_frequency": "weekly"
+        },
+        "deployment_success_rate": {
+          "target": 99.0,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "percentage",
+          "collection_frequency": "per_deployment"
+        },
+        "lead_time": {
+          "target": 60,
+          "current": 0,
+          "trend": "decreasing",
+          "measurement_unit": "minutes",
+          "collection_frequency": "per_deployment"
+        }
       },
-      "tests": {
-        "total_runs": 0,
-        "total_tests": 0,
-        "passed": 0,
-        "failed": 0,
-        "skipped": 0,
-        "avg_execution_time_seconds": 0
-      },
-      "pipeline_efficiency": {
-        "parallel_execution_rate": 0,
-        "cache_hit_rate": 0,
-        "artifact_reuse_rate": 0
+      "resource_utilization": {
+        "cpu_usage": {
+          "target": 70,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "percentage",
+          "collection_frequency": "continuous"
+        },
+        "memory_usage": {
+          "target": 80,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "percentage",
+          "collection_frequency": "continuous"
+        },
+        "gpu_utilization": {
+          "target": 85,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "percentage",
+          "collection_frequency": "continuous"
+        }
       }
     },
-    
-    "performance": {
-      "application": {
-        "response_time_p95_ms": 0,
-        "throughput_requests_per_second": 0,
-        "error_rate_percentage": 0,
-        "uptime_percentage": 0
-      },
-      "infrastructure": {
-        "cpu_usage_avg_percentage": 0,
-        "memory_usage_avg_percentage": 0,
-        "disk_usage_percentage": 0,
-        "network_throughput_mbps": 0
-      },
-      "ml_models": {
-        "inference_time_p95_ms": 0,
-        "model_accuracy": 0,
-        "memory_usage_mb": 0,
-        "gpu_utilization_percentage": 0
-      }
-    },
-    
-    "community": {
-      "github": {
-        "stars": 0,
-        "forks": 0,
-        "watchers": 0,
-        "contributors": 0,
-        "community_score": 0
-      },
-      "documentation": {
-        "pages": 0,
-        "word_count": 0,
-        "last_updated": null,
-        "completeness_score": 0
-      },
-      "user_engagement": {
-        "active_users_monthly": 0,
-        "feature_requests": 0,
-        "support_tickets": 0,
-        "avg_response_time_hours": 0
-      }
-    },
-    
     "business": {
-      "adoption": {
-        "installations": 0,
-        "active_users": 0,
-        "retention_rate_percentage": 0,
-        "growth_rate_monthly": 0
+      "model_performance": {
+        "accuracy": {
+          "target": 90,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "percentage",
+          "collection_frequency": "daily"
+        },
+        "precision": {
+          "target": 88,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "percentage",
+          "collection_frequency": "daily"
+        },
+        "recall": {
+          "target": 87,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "percentage",
+          "collection_frequency": "daily"
+        },
+        "f1_score": {
+          "target": 87.5,
+          "current": 0,
+          "trend": "stable",
+          "measurement_unit": "score",
+          "collection_frequency": "daily"
+        }
       },
       "usage": {
-        "api_calls_daily": 0,
-        "designs_generated_daily": 0,
-        "data_processed_gb_daily": 0,
-        "feature_usage": {}
+        "api_requests": {
+          "target": 1000,
+          "current": 0,
+          "trend": "increasing",
+          "measurement_unit": "requests_per_day",
+          "collection_frequency": "daily"
+        },
+        "active_users": {
+          "target": 50,
+          "current": 0,
+          "trend": "increasing",
+          "measurement_unit": "unique_users_per_week",
+          "collection_frequency": "weekly"
+        },
+        "data_processed": {
+          "target": 100,
+          "current": 0,
+          "trend": "increasing",
+          "measurement_unit": "gb_per_day",
+          "collection_frequency": "daily"
+        }
+      }
+    }
+  },
+  "collection_methods": {
+    "automated": {
+      "github_actions": {
+        "description": "Collect metrics from CI/CD pipelines",
+        "frequency": "per_run",
+        "metrics": [
+          "build_time",
+          "test_execution_time",
+          "test_coverage",
+          "vulnerabilities",
+          "deployment_success_rate"
+        ]
       },
-      "research_impact": {
-        "publications_citing": 0,
-        "academic_collaborations": 0,
-        "industry_partnerships": 0,
-        "open_datasets_created": 0
-      }
-    }
-  },
-  
-  "targets": {
-    "development": {
-      "commits_per_month": 50,
-      "pr_merge_time_hours": 24,
-      "issue_resolution_time_hours": 72,
-      "contributor_growth_monthly": 2
-    },
-    "code_quality": {
-      "test_coverage_percentage": 80,
-      "cyclomatic_complexity_max": 10,
-      "security_score_min": 8,
-      "vulnerability_count_max": 0
-    },
-    "ci_cd": {
-      "build_success_rate": 95,
-      "deployment_success_rate": 98,
-      "test_pass_rate": 98,
-      "pipeline_duration_minutes_max": 15
-    },
-    "performance": {
-      "response_time_p95_ms_max": 2000,
-      "error_rate_percentage_max": 1,
-      "uptime_percentage_min": 99.9,
-      "inference_time_p95_ms_max": 10000
-    },
-    "community": {
-      "github_stars": 100,
-      "contributors": 10,
-      "documentation_completeness": 90,
-      "community_score": 8
-    },
-    "business": {
-      "active_users": 1000,
-      "retention_rate_percentage": 80,
-      "api_calls_daily": 10000,
-      "research_collaborations": 5
-    }
-  },
-  
-  "tracking": {
-    "collection_frequency": "daily",
-    "last_collection": null,
-    "automated_reports": {
-      "daily": true,
-      "weekly": true,
-      "monthly": true,
-      "quarterly": true
-    },
-    "data_retention_days": 365,
-    "export_formats": ["json", "csv", "prometheus"]
-  },
-  
-  "integrations": {
-    "github_api": {
-      "enabled": true,
-      "token_required": true,
-      "rate_limit": 5000
-    },
-    "codecov": {
-      "enabled": false,
-      "token_required": true
-    },
-    "sonarqube": {
-      "enabled": false,
-      "url": null
-    },
-    "prometheus": {
-      "enabled": true,
-      "endpoint": "/metrics"
-    },
-    "grafana": {
-      "enabled": true,
-      "dashboard_id": null
-    }
-  },
-  
-  "alerts": {
-    "thresholds": {
-      "test_coverage_below": 70,
-      "build_success_rate_below": 90,
-      "response_time_above_ms": 5000,
-      "error_rate_above": 5,
-      "security_vulnerabilities_above": 0
-    },
-    "notification_channels": {
-      "slack": {
-        "enabled": false,
-        "webhook_url": null,
-        "channel": "#metrics"
+      "prometheus": {
+        "description": "Collect runtime and performance metrics",
+        "frequency": "continuous",
+        "metrics": [
+          "uptime",
+          "error_rate",
+          "cpu_usage",
+          "memory_usage",
+          "gpu_utilization",
+          "api_requests",
+          "model_inference_latency"
+        ]
       },
-      "email": {
-        "enabled": false,
-        "recipients": []
+      "sonarcloud": {
+        "description": "Collect code quality metrics",
+        "frequency": "per_commit",
+        "metrics": [
+          "code_complexity",
+          "technical_debt",
+          "documentation_coverage"
+        ]
+      }
+    },
+    "manual": {
+      "model_evaluation": {
+        "description": "Manual evaluation of model performance",
+        "frequency": "weekly",
+        "metrics": [
+          "accuracy",
+          "precision",
+          "recall",
+          "f1_score"
+        ]
+      },
+      "user_feedback": {
+        "description": "Collect user satisfaction metrics",
+        "frequency": "monthly",
+        "metrics": [
+          "user_satisfaction",
+          "feature_adoption"
+        ]
       }
     }
   },
-  
-  "benchmarks": {
-    "industry_standards": {
-      "test_coverage": 80,
-      "deployment_frequency": "daily",
-      "lead_time_hours": 24,
-      "mttr_hours": 1,
-      "change_failure_rate": 15
-    },
-    "similar_projects": {
-      "open_source_ml": {
-        "github_stars_median": 500,
-        "contributors_median": 15,
-        "commit_frequency_monthly": 30
+  "reporting": {
+    "dashboards": {
+      "engineering": {
+        "url": "https://grafana.example.com/d/engineering",
+        "metrics": [
+          "test_coverage",
+          "build_time",
+          "deployment_frequency",
+          "vulnerabilities"
+        ],
+        "audience": ["developers", "tech_leads"]
+      },
+      "operations": {
+        "url": "https://grafana.example.com/d/operations",
+        "metrics": [
+          "uptime",
+          "error_rate",
+          "cpu_usage",
+          "memory_usage",
+          "deployment_success_rate"
+        ],
+        "audience": ["devops", "sre"]
+      },
+      "business": {
+        "url": "https://grafana.example.com/d/business",
+        "metrics": [
+          "api_requests",
+          "active_users",
+          "model_performance",
+          "data_processed"
+        ],
+        "audience": ["product_managers", "executives"]
       }
+    },
+    "alerts": {
+      "critical": {
+        "uptime": "< 99%",
+        "critical_vulnerabilities": "> 0",
+        "deployment_failure": "any failure",
+        "model_accuracy": "< 80%"
+      },
+      "warning": {
+        "test_coverage": "< 80%",
+        "build_time": "> 600 seconds",
+        "error_rate": "> 1%",
+        "cpu_usage": "> 85%"
+      }
+    }
+  },
+  "goals": {
+    "2024_q1": {
+      "test_coverage": 85,
+      "deployment_frequency": 10,
+      "model_accuracy": 90,
+      "api_requests": 1000
+    },
+    "2024_q2": {
+      "test_coverage": 90,
+      "deployment_frequency": 15,
+      "model_accuracy": 92,
+      "api_requests": 2000
+    },
+    "2024_q3": {
+      "test_coverage": 92,
+      "deployment_frequency": 20,
+      "model_accuracy": 94,
+      "api_requests": 5000
+    },
+    "2024_q4": {
+      "test_coverage": 95,
+      "deployment_frequency": 25,
+      "model_accuracy": 95,
+      "api_requests": 10000
     }
   }
 }
