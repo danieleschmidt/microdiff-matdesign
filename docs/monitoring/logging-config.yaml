@@ -1,0 +1,301 @@
+# Structured logging configuration for MicroDiff-MatDesign
+# This configuration provides comprehensive logging with JSON formatting,
+# correlation tracking, and performance monitoring
+
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  json:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: "%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d %(funcName)s %(created)f %(thread)d %(threadName)s %(process)d %(processName)s"
+    
+  detailed:
+    format: "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(funcName)s() - %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+    
+  simple:
+    format: "%(levelname)s - %(name)s - %(message)s"
+
+filters:
+  correlation_id:
+    class: microdiff_matdesign.logging.CorrelationFilter
+    
+  performance:
+    class: microdiff_matdesign.logging.PerformanceFilter
+    threshold_ms: 100  # Log slow operations over 100ms
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: detailed
+    stream: ext://sys.stdout
+    filters: [correlation_id]
+    
+  file_json:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: json
+    filename: logs/application.json
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+    encoding: utf8
+    filters: [correlation_id, performance]
+    
+  error_file:
+    class: logging.handlers.RotatingFileHandler
+    level: ERROR
+    formatter: json
+    filename: logs/errors.json
+    maxBytes: 10485760  # 10MB
+    backupCount: 10
+    encoding: utf8
+    filters: [correlation_id]
+    
+  security_file:
+    class: logging.handlers.RotatingFileHandler
+    level: WARNING
+    formatter: json
+    filename: logs/security.json
+    maxBytes: 10485760  # 10MB
+    backupCount: 20
+    encoding: utf8
+    filters: [correlation_id]
+    
+  performance_file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: json
+    filename: logs/performance.json
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+    encoding: utf8
+    filters: [performance]
+    
+  audit_file:
+    class: logging.handlers.RotatingFileHandler
+    level: INFO
+    formatter: json
+    filename: logs/audit.json
+    maxBytes: 10485760  # 10MB
+    backupCount: 50
+    encoding: utf8
+
+loggers:
+  # Application loggers
+  microdiff_matdesign:
+    level: DEBUG
+    handlers: [console, file_json, error_file]
+    propagate: false
+    
+  microdiff_matdesign.core:
+    level: DEBUG
+    handlers: [file_json, performance_file]
+    propagate: false
+    
+  microdiff_matdesign.models:
+    level: INFO
+    handlers: [file_json, performance_file]
+    propagate: false
+    
+  microdiff_matdesign.imaging:
+    level: INFO
+    handlers: [file_json, performance_file]
+    propagate: false
+    
+  microdiff_matdesign.api:
+    level: INFO
+    handlers: [file_json, audit_file]
+    propagate: false
+    
+  # Security-related logging
+  microdiff_matdesign.security:
+    level: WARNING
+    handlers: [security_file, error_file]
+    propagate: false
+    
+  microdiff_matdesign.auth:
+    level: INFO
+    handlers: [security_file, audit_file]
+    propagate: false
+    
+  # Performance monitoring
+  microdiff_matdesign.performance:
+    level: INFO
+    handlers: [performance_file]
+    propagate: false
+    
+  # Database operations
+  sqlalchemy:
+    level: WARNING
+    handlers: [file_json]
+    propagate: false
+    
+  sqlalchemy.engine:
+    level: WARNING
+    handlers: [file_json, performance_file]
+    propagate: false
+    
+  # ML framework logging
+  torch:
+    level: WARNING
+    handlers: [file_json]
+    propagate: false
+    
+  transformers:
+    level: WARNING
+    handlers: [file_json]
+    propagate: false
+    
+  # HTTP libraries
+  requests:
+    level: WARNING
+    handlers: [file_json]
+    propagate: false
+    
+  urllib3:
+    level: WARNING
+    handlers: [file_json]
+    propagate: false
+    
+  # Third-party libraries
+  celery:
+    level: INFO
+    handlers: [file_json]
+    propagate: false
+    
+  gunicorn:
+    level: INFO
+    handlers: [file_json]
+    propagate: false
+
+root:
+  level: INFO
+  handlers: [console, file_json]
+
+# Log level mapping for different environments
+environments:
+  development:
+    root_level: DEBUG
+    console_level: DEBUG
+    file_level: DEBUG
+    
+  testing:
+    root_level: WARNING
+    console_level: WARNING
+    file_level: INFO
+    
+  staging:
+    root_level: INFO
+    console_level: INFO
+    file_level: DEBUG
+    
+  production:
+    root_level: WARNING
+    console_level: WARNING
+    file_level: INFO
+
+# Structured logging fields
+structured_fields:
+  required:
+    - timestamp
+    - level
+    - logger_name
+    - message
+    - correlation_id
+    
+  optional:
+    - user_id
+    - session_id
+    - request_id
+    - trace_id
+    - span_id
+    - component
+    - operation
+    - duration_ms
+    - status_code
+    - error_type
+    - error_message
+    - stack_trace
+    - model_name
+    - model_version
+    - inference_id
+    - batch_size
+    - input_shape
+    - output_shape
+    - gpu_memory_used
+    - cpu_usage
+    - memory_usage
+
+# Performance monitoring configuration
+performance_monitoring:
+  slow_query_threshold_ms: 1000
+  slow_inference_threshold_ms: 5000
+  memory_usage_threshold_mb: 1000
+  cpu_usage_threshold_percent: 80
+  
+  metrics_to_log:
+    - request_duration
+    - database_query_time
+    - model_inference_time
+    - image_processing_time
+    - memory_usage
+    - cpu_usage
+    - gpu_utilization
+    - cache_hit_rate
+
+# Security logging configuration
+security_logging:
+  events_to_log:
+    - authentication_attempt
+    - authorization_failure
+    - suspicious_activity
+    - data_access
+    - configuration_change
+    - system_error
+    - privilege_escalation_attempt
+    
+  sensitive_fields_to_mask:
+    - password
+    - token
+    - api_key
+    - secret
+    - credential
+    - private_key
+    - session_token
+
+# Log retention and rotation
+retention:
+  application_logs: 30 days
+  error_logs: 90 days
+  security_logs: 365 days
+  audit_logs: 2555 days  # 7 years
+  performance_logs: 30 days
+  
+rotation:
+  size_based: true
+  time_based: false
+  max_file_size: 10MB
+  backup_count: 10
+
+# Integration with external systems
+external_integrations:
+  elasticsearch:
+    enabled: false
+    host: "localhost:9200"
+    index_pattern: "microdiff-matdesign-%Y.%m.%d"
+    
+  splunk:
+    enabled: false
+    host: "localhost:8089"
+    index: "microdiff_matdesign"
+    
+  datadog:
+    enabled: false
+    api_key: "${DATADOG_API_KEY}"
+    
+  prometheus:
+    enabled: true
+    metrics_port: 8080
+    metrics_path: "/metrics"

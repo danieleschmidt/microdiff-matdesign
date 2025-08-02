@@ -1,0 +1,289 @@
+# Prometheus configuration for MicroDiff-MatDesign monitoring
+# This configuration sets up comprehensive metrics collection for
+# application performance, system resources, and business metrics
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: "${ENVIRONMENT:-development}"
+    application: "microdiff-matdesign"
+
+rule_files:
+  - "alert_rules.yml"
+  - "recording_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - "alertmanager:9093"
+
+scrape_configs:
+  # Application metrics
+  - job_name: "microdiff-matdesign"
+    static_configs:
+      - targets: ["localhost:8080"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    
+    # Custom labels for application metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "localhost:8080"
+
+  # System metrics (node_exporter)
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["localhost:9100"]
+    scrape_interval: 15s
+    
+  # Database metrics (if using PostgreSQL)
+  - job_name: "postgres-exporter"
+    static_configs:
+      - targets: ["localhost:9187"]
+    scrape_interval: 30s
+    
+  # GPU metrics (if using NVIDIA GPUs)
+  - job_name: "nvidia-gpu"
+    static_configs:
+      - targets: ["localhost:9400"]
+    scrape_interval: 10s
+    
+  # Container metrics (if using Docker)
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["localhost:8081"]
+    scrape_interval: 15s
+    
+  # Redis metrics (if using Redis for caching)
+  - job_name: "redis-exporter"
+    static_configs:
+      - targets: ["localhost:9121"]
+    scrape_interval: 30s
+
+# Application-specific metric groups
+metric_groups:
+  
+  # Core application metrics
+  application_metrics:
+    - microdiff_requests_total
+    - microdiff_request_duration_seconds
+    - microdiff_errors_total
+    - microdiff_active_connections
+    - microdiff_memory_usage_bytes
+    - microdiff_cpu_usage_percent
+    
+  # ML model metrics
+  model_metrics:
+    - microdiff_model_inference_duration_seconds
+    - microdiff_model_inference_total
+    - microdiff_model_errors_total
+    - microdiff_model_memory_usage_bytes
+    - microdiff_model_gpu_utilization_percent
+    - microdiff_model_batch_size
+    - microdiff_model_queue_size
+    
+  # Image processing metrics
+  imaging_metrics:
+    - microdiff_image_processing_duration_seconds
+    - microdiff_image_processing_total
+    - microdiff_image_processing_errors_total
+    - microdiff_image_size_bytes
+    - microdiff_image_dimensions
+    
+  # Business metrics
+  business_metrics:
+    - microdiff_designs_generated_total
+    - microdiff_parameters_optimized_total
+    - microdiff_user_sessions_active
+    - microdiff_api_usage_total
+    - microdiff_success_rate_percent
+    
+  # System metrics
+  system_metrics:
+    - node_cpu_seconds_total
+    - node_memory_MemAvailable_bytes
+    - node_disk_io_time_seconds_total
+    - node_network_receive_bytes_total
+    - node_network_transmit_bytes_total
+    - node_filesystem_avail_bytes
+
+# Recording rules for pre-computed metrics
+recording_rules:
+  - name: "microdiff_application_rules"
+    interval: 30s
+    rules:
+      
+      # Request rate per minute
+      - record: microdiff:request_rate_1m
+        expr: rate(microdiff_requests_total[1m])
+        
+      # Error rate percentage
+      - record: microdiff:error_rate_percent
+        expr: |
+          (
+            rate(microdiff_errors_total[5m]) /
+            rate(microdiff_requests_total[5m])
+          ) * 100
+          
+      # Average response time
+      - record: microdiff:avg_response_time_seconds
+        expr: |
+          rate(microdiff_request_duration_seconds_sum[5m]) /
+          rate(microdiff_request_duration_seconds_count[5m])
+          
+      # 95th percentile response time
+      - record: microdiff:response_time_95th_percentile
+        expr: histogram_quantile(0.95, rate(microdiff_request_duration_seconds_bucket[5m]))
+        
+      # Model inference rate
+      - record: microdiff:inference_rate_1m
+        expr: rate(microdiff_model_inference_total[1m])
+        
+      # Model error rate
+      - record: microdiff:model_error_rate_percent
+        expr: |
+          (
+            rate(microdiff_model_errors_total[5m]) /
+            rate(microdiff_model_inference_total[5m])
+          ) * 100
+          
+      # GPU utilization average
+      - record: microdiff:gpu_utilization_avg
+        expr: avg(microdiff_model_gpu_utilization_percent)
+        
+      # Memory usage percentage
+      - record: microdiff:memory_usage_percent
+        expr: |
+          (
+            (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) /
+            node_memory_MemTotal_bytes
+          ) * 100
+          
+      # Disk usage percentage
+      - record: microdiff:disk_usage_percent
+        expr: |
+          (
+            (node_filesystem_size_bytes - node_filesystem_avail_bytes) /
+            node_filesystem_size_bytes
+          ) * 100
+          
+      # Application throughput (successful requests per second)
+      - record: microdiff:throughput_rps
+        expr: |
+          rate(microdiff_requests_total[1m]) - 
+          rate(microdiff_errors_total[1m])
+
+# Custom metric definitions for application instrumentation
+custom_metrics:
+  
+  counters:
+    - name: microdiff_requests_total
+      help: "Total number of HTTP requests"
+      labels: ["method", "endpoint", "status_code"]
+      
+    - name: microdiff_model_inference_total
+      help: "Total number of model inferences"
+      labels: ["model_name", "model_version", "status"]
+      
+    - name: microdiff_image_processing_total
+      help: "Total number of images processed"
+      labels: ["processing_type", "image_format", "status"]
+      
+    - name: microdiff_designs_generated_total
+      help: "Total number of material designs generated"
+      labels: ["alloy_type", "process_type", "success"]
+      
+  histograms:
+    - name: microdiff_request_duration_seconds
+      help: "HTTP request duration in seconds"
+      labels: ["method", "endpoint"]
+      buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+      
+    - name: microdiff_model_inference_duration_seconds
+      help: "Model inference duration in seconds"
+      labels: ["model_name", "batch_size"]
+      buckets: [0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0]
+      
+    - name: microdiff_image_processing_duration_seconds
+      help: "Image processing duration in seconds"
+      labels: ["processing_type", "image_size"]
+      buckets: [0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
+      
+  gauges:
+    - name: microdiff_active_connections
+      help: "Number of active connections"
+      
+    - name: microdiff_model_memory_usage_bytes
+      help: "Model memory usage in bytes"
+      labels: ["model_name"]
+      
+    - name: microdiff_model_gpu_utilization_percent
+      help: "GPU utilization percentage"
+      labels: ["gpu_id"]
+      
+    - name: microdiff_queue_size
+      help: "Size of processing queue"
+      labels: ["queue_type"]
+      
+    - name: microdiff_cache_hit_rate_percent
+      help: "Cache hit rate percentage"
+      labels: ["cache_type"]
+
+# Monitoring best practices configuration
+monitoring_config:
+  
+  # Scraping frequency based on metric importance
+  scrape_intervals:
+    critical_metrics: 5s      # Health checks, error rates
+    performance_metrics: 10s  # Response times, throughput
+    resource_metrics: 15s     # CPU, memory, disk
+    business_metrics: 30s     # User actions, feature usage
+    
+  # Retention periods for different metric types
+  retention_periods:
+    high_frequency: "7d"      # Detailed performance metrics
+    medium_frequency: "30d"   # General application metrics
+    low_frequency: "90d"      # Business and trend metrics
+    
+  # Alert thresholds
+  alert_thresholds:
+    error_rate_percent: 5.0
+    response_time_95th_ms: 2000
+    memory_usage_percent: 85.0
+    disk_usage_percent: 90.0
+    cpu_usage_percent: 80.0
+    gpu_utilization_percent: 95.0
+    
+# Integration with external monitoring systems
+integrations:
+  
+  grafana:
+    enabled: true
+    dashboard_configs:
+      - name: "Application Overview"
+        file: "dashboards/application-overview.json"
+      - name: "Model Performance"
+        file: "dashboards/model-performance.json"
+      - name: "System Resources"
+        file: "dashboards/system-resources.json"
+        
+  jaeger:
+    enabled: true
+    endpoint: "http://localhost:14268/api/traces"
+    
+  datadog:
+    enabled: false
+    api_key: "${DATADOG_API_KEY}"
+    
+  newrelic:
+    enabled: false
+    license_key: "${NEWRELIC_LICENSE_KEY}"

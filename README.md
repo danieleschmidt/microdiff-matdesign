@@ -1,6 +1,14 @@
 # MicroDiff-MatDesign
 
+[![CI/CD](https://github.com/danieleschmidt/microdiff-matdesign/workflows/CI/badge.svg)](https://github.com/danieleschmidt/microdiff-matdesign/actions)
+[![Coverage](https://codecov.io/gh/danieleschmidt/microdiff-matdesign/branch/main/graph/badge.svg)](https://codecov.io/gh/danieleschmidt/microdiff-matdesign)
+[![Documentation](https://readthedocs.org/projects/microdiff-matdesign/badge/?version=latest)](https://microdiff-matdesign.readthedocs.io/en/latest/)
+[![PyPI version](https://badge.fury.io/py/microdiff-matdesign.svg)](https://badge.fury.io/py/microdiff-matdesign)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 Diffusion model framework for inverse material design that transforms micro-CT images into printable alloy process parameters. Based on Berkeley's microstructure diffusion paper (April 2025), this tool enables AI-driven optimization of material properties through generative modeling.
+
+> ⚠️ **Enterprise-Ready SDLC Implementation** - This repository includes comprehensive SDLC infrastructure with automated testing, security scanning, monitoring, and deployment pipelines. See [SDLC Documentation](docs/) for details.
 
 ## Overview
 
@@ -287,7 +295,6 @@ This project implements a comprehensive Software Development Life Cycle (SDLC) w
 
 ### Quick Development Setup
 
-```bash
 # Clone repository
 git clone https://github.com/danieleschmidt/microdiff-matdesign
 cd microdiff-matdesign
