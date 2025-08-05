@@ -5,7 +5,7 @@ import numpy as np
 import warnings
 from scipy import ndimage
 from scipy.ndimage import gaussian_filter, median_filter
-from skimage import morphology, filters, segmentation
+from skimage import morphology, filters, segmentation, measure
 from skimage.restoration import denoise_tv_chambolle, denoise_bilateral
 
 
@@ -354,7 +354,7 @@ def extract_microstructure_features(volume: np.ndarray,
         
         # Connected component analysis for grain size
         labeled_grains = morphology.label(matrix_mask)
-        props = morphology.regionprops(labeled_grains)
+        props = measure.regionprops(labeled_grains)
         
         if props:
             grain_areas = [prop.area for prop in props]

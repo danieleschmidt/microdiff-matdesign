@@ -16,7 +16,7 @@ from .core import MicrostructureDiffusion, ProcessParameters, train_diffusion_mo
 from .imaging import MicroCTProcessor
 from .services.parameter_generation import ParameterGenerationService
 from .services.optimization import OptimizationService
-from .services.analysis import MicrostructureAnalysisService
+from .services.analysis import AnalysisService
 from .services.prediction import PropertyPredictionService
 from .data.datasets import create_microstructure_dataset, create_parameter_dataset
 from .data.models import ExperimentData
@@ -349,7 +349,7 @@ def analyze(ctx, image_path, output, features, visualize):
         
         # Initialize processor and analysis service
         processor = MicroCTProcessor(voxel_size=0.5, cache_enabled=True)
-        analysis_service = MicrostructureAnalysisService()
+        analysis_service = AnalysisService()
         
         # Load microstructure
         if Path(image_path).is_dir():
@@ -370,7 +370,7 @@ def analyze(ctx, image_path, output, features, visualize):
         basic_features = processor.extract_features(microstructure, feature_types=feature_types)
         
         # Perform comprehensive analysis
-        analysis_results = analysis_service.analyze_microstructure(microstructure)
+        analysis_results = analysis_service.analyze_microstructure(microstructure).microstructure_features
         
         # Porosity analysis
         porosity_results = processor.analyze_porosity(microstructure)
