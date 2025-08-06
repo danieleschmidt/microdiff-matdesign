@@ -1,0 +1,24 @@
+# Core requirements for quantum task planner (lightweight)
+# These are the minimal requirements for basic functionality
+
+# Standard library backports
+dataclasses; python_version<'3.7'
+
+# Optional heavy dependencies (install with pip install quantum-task-planner[full])
+# numpy>=1.21.0
+# matplotlib>=3.5.0
+# seaborn>=0.11.0
+# networkx>=2.6.0
+# psutil>=5.8.0
+# scipy>=1.7.0
+
+# For development
+# pytest>=6.0.0
+# pytest-cov>=2.0.0
+# black>=21.0.0
+# flake8>=3.9.0
+# mypy>=0.910
+
+# The quantum planner is designed to work with or without heavy dependencies
+# Core functionality (task management, basic scheduling, validation) works with Python stdlib only
+# Advanced features (visualization, performance monitoring, advanced algorithms) require optional deps
