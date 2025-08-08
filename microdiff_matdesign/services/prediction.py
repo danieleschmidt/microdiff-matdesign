@@ -842,4 +842,102 @@ class PredictionService:
                     'relative_gap': (target_value - current_value) / target_value if target_value != 0 else 0,
                     'confidence': prediction.result.confidence,
                     'units': prediction.units
-                }\n                \n                # Assess feasibility\n                uncertainty_range = prediction.result.uncertainty_range\n                feasible = uncertainty_range[0] <= target_value <= uncertainty_range[1]\n                \n                recommendations['feasibility_assessment'][property_name] = {\n                    'feasible_within_uncertainty': feasible,\n                    'uncertainty_range': uncertainty_range,\n                    'difficulty': self._assess_optimization_difficulty(property_name, target_value, current_value)\n                }\n                \n            except Exception as e:\n                warnings.warn(f\"Failed to analyze {property_name}: {str(e)}\")\n        \n        # Generate parameter adjustment recommendations\n        recommendations['parameter_adjustments'] = self._generate_parameter_adjustments(\n            target_properties, current_parameters, constraints\n        )\n        \n        return recommendations\n    \n    def _assess_optimization_difficulty(self, property_name: str, target_value: float, current_value: float) -> str:\n        \"\"\"Assess difficulty of achieving target property.\"\"\"\n        \n        relative_change = abs(target_value - current_value) / abs(current_value) if current_value != 0 else 1\n        \n        if relative_change < 0.05:\n            return 'easy'\n        elif relative_change < 0.15:\n            return 'moderate'\n        elif relative_change < 0.30:\n            return 'difficult'\n        else:\n            return 'very_difficult'\n    \n    def _generate_parameter_adjustments(self, target_properties: Dict[str, float],\n                                      current_parameters: ProcessParameters,\n                                      constraints: Optional[Dict[str, Tuple[float, float]]] = None) -> Dict[str, str]:\n        \"\"\"Generate parameter adjustment recommendations.\"\"\"\n        \n        adjustments = {}\n        \n        for property_name, target_value in target_properties.items():\n            try:\n                current_prediction = self.predict_property(current_parameters, property_name)\n                current_value = current_prediction.result.predicted_value\n                \n                if current_value < target_value:\n                    # Need to increase property\n                    adjustments[property_name] = self._get_increase_recommendations(property_name)\n                else:\n                    # Need to decrease property\n                    adjustments[property_name] = self._get_decrease_recommendations(property_name)\n                    \n            except Exception:\n                adjustments[property_name] = \"Unable to generate recommendations\"\n        \n        return adjustments\n    \n    def _get_increase_recommendations(self, property_name: str) -> str:\n        \"\"\"Get recommendations to increase a property.\"\"\"\n        \n        if property_name in ['tensile_strength', 'yield_strength', 'hardness']:\n            return \"Increase energy density by reducing scan speed or increasing laser power. Consider reducing layer thickness.\"\n        elif property_name == 'elongation':\n            return \"Optimize energy density around 80 J/mm³. Consider reducing scan speed for better melting.\"\n        elif property_name == 'density':\n            return \"Increase energy density. Reduce scan speed, increase laser power, or reduce hatch spacing.\"\n        elif property_name == 'surface_roughness':\n            return \"Increase layer thickness or reduce energy density to avoid overmelting.\"\n        elif property_name == 'build_rate':\n            return \"Increase scan speed or layer thickness while maintaining adequate energy density.\"\n        else:\n            return \"Adjust process parameters based on property relationships.\"\n    \n    def _get_decrease_recommendations(self, property_name: str) -> str:\n        \"\"\"Get recommendations to decrease a property.\"\"\"\n        \n        if property_name in ['tensile_strength', 'yield_strength', 'hardness']:\n            return \"Decrease energy density by increasing scan speed or reducing laser power.\"\n        elif property_name == 'surface_roughness':\n            return \"Reduce layer thickness or optimize energy density to avoid overmelting.\"\n        elif property_name == 'porosity':\n            return \"Increase energy density. Reduce scan speed, increase laser power, or reduce hatch spacing.\"\n        else:\n            return \"Adjust process parameters based on property relationships.\"\n    \n    def get_available_properties(self) -> Dict[str, Dict[str, str]]:\n        \"\"\"Get list of all available properties and their metadata.\"\"\"\n        \n        return {\n            name: {\n                'type': meta['type'].value,\n                'units': meta['units'],\n                'description': meta['description']\n            }\n            for name, meta in self.property_metadata.items()\n        }"
+                }
+                
+                # Assess feasibility
+                uncertainty_range = prediction.result.uncertainty_range
+                feasible = uncertainty_range[0] <= target_value <= uncertainty_range[1]
+                
+                recommendations['feasibility_assessment'][property_name] = {
+                    'feasible_within_uncertainty': feasible,
+                    'uncertainty_range': uncertainty_range,
+                    'difficulty': self._assess_optimization_difficulty(property_name, target_value, current_value)
+                }
+                
+            except Exception as e:
+                warnings.warn(f"Failed to analyze {property_name}: {str(e)}")
+        
+        # Generate parameter adjustment recommendations
+        recommendations['parameter_adjustments'] = self._generate_parameter_adjustments(
+            target_properties, current_parameters, constraints
+        )
+        
+        return recommendations
+    
+    def _assess_optimization_difficulty(self, property_name: str, target_value: float, current_value: float) -> str:
+        """Assess difficulty of achieving target property."""
+        
+        relative_change = abs(target_value - current_value) / abs(current_value) if current_value != 0 else 1
+        
+        if relative_change < 0.05:
+            return 'easy'
+        elif relative_change < 0.15:
+            return 'moderate'
+        elif relative_change < 0.30:
+            return 'difficult'
+        else:
+            return 'very_difficult'
+    
+    def _generate_parameter_adjustments(self, target_properties: Dict[str, float],
+                                      current_parameters: ProcessParameters,
+                                      constraints: Optional[Dict[str, Tuple[float, float]]] = None) -> Dict[str, str]:
+        """Generate parameter adjustment recommendations."""
+        
+        adjustments = {}
+        
+        for property_name, target_value in target_properties.items():
+            try:
+                current_prediction = self.predict_property(current_parameters, property_name)
+                current_value = current_prediction.result.predicted_value
+                
+                if current_value < target_value:
+                    # Need to increase property
+                    adjustments[property_name] = self._get_increase_recommendations(property_name)
+                else:
+                    # Need to decrease property
+                    adjustments[property_name] = self._get_decrease_recommendations(property_name)
+                    
+            except Exception:
+                adjustments[property_name] = "Unable to generate recommendations"
+        
+        return adjustments
+    
+    def _get_increase_recommendations(self, property_name: str) -> str:
+        """Get recommendations to increase a property."""
+        
+        if property_name in ['tensile_strength', 'yield_strength', 'hardness']:
+            return "Increase energy density by reducing scan speed or increasing laser power. Consider reducing layer thickness."
+        elif property_name == 'elongation':
+            return "Optimize energy density around 80 J/mm³. Consider reducing scan speed for better melting."
+        elif property_name == 'density':
+            return "Increase energy density. Reduce scan speed, increase laser power, or reduce hatch spacing."
+        elif property_name == 'surface_roughness':
+            return "Increase layer thickness or reduce energy density to avoid overmelting."
+        elif property_name == 'build_rate':
+            return "Increase scan speed or layer thickness while maintaining adequate energy density."
+        else:
+            return "Adjust process parameters based on property relationships."
+    
+    def _get_decrease_recommendations(self, property_name: str) -> str:
+        """Get recommendations to decrease a property."""
+        
+        if property_name in ['tensile_strength', 'yield_strength', 'hardness']:
+            return "Decrease energy density by increasing scan speed or reducing laser power."
+        elif property_name == 'surface_roughness':
+            return "Reduce layer thickness or optimize energy density to avoid overmelting."
+        elif property_name == 'porosity':
+            return "Increase energy density. Reduce scan speed, increase laser power, or reduce hatch spacing."
+        else:
+            return "Adjust process parameters based on property relationships."
+    
+    def get_available_properties(self) -> Dict[str, Dict[str, str]]:
+        """Get list of all available properties and their metadata."""
+        
+        return {
+            name: {
+                'type': meta['type'].value,
+                'units': meta['units'],
+                'description': meta['description']
+            }
+            for name, meta in self.property_metadata.items()
+        }
