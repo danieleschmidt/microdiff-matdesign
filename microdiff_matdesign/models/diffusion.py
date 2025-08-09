@@ -197,16 +197,17 @@ class DiffusionModel(nn.Module):
         
         return sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
     
-    def sample(self, shape: torch.Size, condition: Optional[torch.Tensor] = None,
-               guidance_scale: float = 1.0, device: str = 'cpu') -> torch.Tensor:
+    def sample(self, noise: torch.Tensor, condition: Optional[torch.Tensor] = None,
+               guidance_scale: float = 1.0) -> torch.Tensor:
         """Sample from the diffusion model using DDPM sampling."""
         
-        # Start from pure noise
-        x = torch.randn(shape, device=device)
+        # Use provided noise
+        x = noise
+        device = x.device
         
         # Reverse diffusion process
         for t in reversed(range(self.num_steps)):
-            t_tensor = torch.full((shape[0],), t, device=device, dtype=torch.long)
+            t_tensor = torch.full((x.shape[0],), t, device=device, dtype=torch.long)
             
             # Predict noise
             if condition is not None and guidance_scale != 1.0:

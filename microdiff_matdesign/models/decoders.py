@@ -33,22 +33,13 @@ class ParameterDecoder(nn.Module):
             nn.Linear(hidden_dim // 2, 4)  # argon, nitrogen, vacuum, air
         )
         
-        # Global decoder for joint parameter prediction
-        layers = []
-        current_dim = latent_dim
-        
-        for i in range(num_layers):
-            next_dim = hidden_dim // (2 ** i)
-            layers.extend([
-                nn.Linear(current_dim, next_dim),
-                nn.BatchNorm1d(next_dim),
-                nn.ReLU(),
-                nn.Dropout(0.1)
-            ])
-            current_dim = next_dim
-        
-        # Output layer
-        layers.append(nn.Linear(current_dim, output_dim - 1))  # Exclude categorical atmosphere
+        # Simplified decoder for Generation 1
+        layers = [
+            nn.Linear(latent_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim, output_dim)  # Include all parameters
+        ]
         
         self.global_decoder = nn.Sequential(*layers)
         

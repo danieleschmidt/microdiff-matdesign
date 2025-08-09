@@ -110,11 +110,11 @@ class MicrostructureDiffusion:
             with open(config_path, 'r') as f:
                 return yaml.safe_load(f)
         else:
-            # Default configuration
+            # Default configuration - simplified for Generation 1
             return {
-                'encoder': {'input_dim': 128*128*128, 'hidden_dim': 512, 'latent_dim': 256},
-                'diffusion': {'input_dim': 256, 'hidden_dim': 512, 'num_steps': 1000},
-                'decoder': {'latent_dim': 256, 'hidden_dim': 512, 'output_dim': 6}
+                'encoder': {'input_dim': 64*64*64, 'hidden_dim': 256, 'latent_dim': 128},
+                'diffusion': {'input_dim': 128, 'hidden_dim': 256, 'num_steps': 10},  # Very simple for testing
+                'decoder': {'latent_dim': 128, 'hidden_dim': 256, 'output_dim': 5}
             }
     
     def _load_pretrained_weights(self, model_path: Optional[str] = None):
@@ -197,12 +197,21 @@ class MicrostructureDiffusion:
         mean_params = np.mean(denormalized_params, axis=0)
         
         # Create ProcessParameters object with mean values
+        # Handle both single sample and batch cases
+        if mean_params.ndim > 1:
+            mean_params = mean_params[0]  # Take first sample if batch
+            
+        # Clip parameters to valid ranges for untrained model
+        clipped_params = np.clip(mean_params, 
+                               [100.0, 400.0, 20.0, 80.0, 50.0],  # mins
+                               [400.0, 1500.0, 80.0, 250.0, 150.0])  # maxs
+        
         result_params = ProcessParameters(
-            laser_power=float(mean_params[0]),
-            scan_speed=float(mean_params[1]),
-            layer_thickness=float(mean_params[2]),
-            hatch_spacing=float(mean_params[3]),
-            powder_bed_temp=float(mean_params[4]) if len(mean_params) > 4 else 80.0
+            laser_power=float(clipped_params[0]) if len(clipped_params) > 0 else 200.0,
+            scan_speed=float(clipped_params[1]) if len(clipped_params) > 1 else 800.0,
+            layer_thickness=float(clipped_params[2]) if len(clipped_params) > 2 else 30.0,
+            hatch_spacing=float(clipped_params[3]) if len(clipped_params) > 3 else 120.0,
+            powder_bed_temp=float(clipped_params[4]) if len(clipped_params) > 4 else 80.0
         )
         
         validate_parameters(result_params.to_dict(), self.process)

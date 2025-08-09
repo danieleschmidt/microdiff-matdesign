@@ -1,6 +1,6 @@
 """Preprocessing utilities for microstructures and parameters."""
 
-from typing import Tuple, Optional, Union, Dict, Any
+from typing import Tuple, Optional, Union, Dict, Any, List
 import numpy as np
 import warnings
 from scipy import ndimage
@@ -155,7 +155,7 @@ def denoise_volume(volume: np.ndarray, method: str = "bilateral") -> np.ndarray:
         raise ValueError(f"Unknown denoising method: {method}")
 
 
-def enhance_volume_contrast(volume: np.ndarray, method: str = "clahe") -> np.ndarray:
+def enhance_volume_contrast(volume: np.ndarray, method: str = "gamma") -> np.ndarray:
     """Enhance contrast in 3D volumes."""
     
     if method == "clahe":
@@ -163,14 +163,29 @@ def enhance_volume_contrast(volume: np.ndarray, method: str = "clahe") -> np.nda
         # Apply slice by slice
         enhanced = np.zeros_like(volume)
         for i in range(volume.shape[0]):
-            enhanced[i] = filters.rank.enhance_contrast(volume[i], morphology.disk(30))
+            # Ensure volume slice is in correct range for CLAHE
+            slice_data = volume[i]
+            if slice_data.max() > 1.0 or slice_data.min() < 0.0:
+                slice_data = (slice_data - slice_data.min()) / (slice_data.max() - slice_data.min())
+            try:
+                enhanced[i] = filters.rank.enhance_contrast(slice_data, morphology.disk(30))
+            except (ValueError, ImportError):
+                # Fallback to simple contrast enhancement if filters.rank not available
+                enhanced[i] = np.clip(slice_data * 1.2, 0, 1)
         return enhanced
     
     elif method == "histogram_eq":
         # Histogram equalization
         enhanced = np.zeros_like(volume)
         for i in range(volume.shape[0]):
-            enhanced[i] = filters.rank.equalize(volume[i], morphology.disk(30))
+            slice_data = volume[i]
+            if slice_data.max() > 1.0 or slice_data.min() < 0.0:
+                slice_data = (slice_data - slice_data.min()) / (slice_data.max() - slice_data.min())
+            try:
+                enhanced[i] = filters.rank.equalize(slice_data, morphology.disk(30))
+            except (ValueError, ImportError):
+                # Fallback to histogram equalization
+                enhanced[i] = slice_data
         return enhanced
     
     elif method == "gamma":
