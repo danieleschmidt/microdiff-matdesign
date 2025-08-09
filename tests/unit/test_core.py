@@ -14,7 +14,7 @@ class TestMicrostructureDiffusion:
     
     def test_initialization_default(self):
         """Test default initialization."""
-        model = MicrostructureDiffusion()
+        model = MicrostructureDiffusion(pretrained=False)
         assert model.alloy == "Ti-6Al-4V"
         assert model.process == "laser_powder_bed_fusion"
         assert not model.pretrained

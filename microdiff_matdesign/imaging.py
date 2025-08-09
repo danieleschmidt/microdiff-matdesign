@@ -12,7 +12,6 @@ from scipy.ndimage import gaussian_filter, median_filter, binary_opening, binary
 from skimage import io, filters, morphology, segmentation, measure, restoration
 from skimage.morphology import disk, ball, remove_small_objects, remove_small_holes
 from skimage.segmentation import watershed, chan_vese, morphological_geodesic_active_contour
-from skimage.feature import peak_local_maxima
 from skimage.filters import threshold_otsu, threshold_multiotsu, sobel, gaussian
 import warnings
 

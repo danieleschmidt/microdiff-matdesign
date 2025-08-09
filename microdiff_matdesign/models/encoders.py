@@ -18,41 +18,24 @@ class MicrostructureEncoder(nn.Module):
         self.hidden_dim = hidden_dim
         self.latent_dim = latent_dim
         
-        # Progressive dimensionality reduction
-        layers = []
-        current_dim = input_dim
-        
-        for i in range(num_layers):
-            next_dim = hidden_dim // (2 ** (num_layers - i - 1))
-            layers.extend([
-                nn.Linear(current_dim, next_dim),
-                nn.BatchNorm1d(next_dim),
-                nn.ReLU(),
-                nn.Dropout(0.1)
-            ])
-            current_dim = next_dim
-        
-        # Final projection to latent space
-        layers.append(nn.Linear(current_dim, latent_dim))
+        # Simplified architecture for Generation 1
+        layers = [
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim, latent_dim)
+        ]
         
         self.encoder = nn.Sequential(*layers)
         
-        # Decoder for reconstruction (used in some training scenarios)
-        decoder_layers = []
-        current_dim = latent_dim
-        
-        for i in range(num_layers):
-            next_dim = hidden_dim // (2 ** i)
-            decoder_layers.extend([
-                nn.Linear(current_dim, next_dim),
-                nn.BatchNorm1d(next_dim),
-                nn.ReLU(),
-                nn.Dropout(0.1)
-            ])
-            current_dim = next_dim
-        
-        decoder_layers.append(nn.Linear(current_dim, input_dim))
-        decoder_layers.append(nn.Tanh())  # Normalize output
+        # Simplified decoder for Generation 1
+        decoder_layers = [
+            nn.Linear(latent_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim, input_dim),
+            nn.Tanh()  # Normalize output
+        ]
         
         self.decoder = nn.Sequential(*decoder_layers)
     
