@@ -43,6 +43,51 @@ class PhysicsConstraintError(Exception):
     pass
 
 
+class RobustValidator:
+    """Comprehensive validation system for MicroDiff-MatDesign."""
+    
+    def __init__(self):
+        self.logger = logger
+        self.validation_cache = {}
+        
+    def validate_microstructure(self, microstructure: np.ndarray) -> bool:
+        """Validate microstructure data."""
+        if not isinstance(microstructure, np.ndarray):
+            raise ValidationError("Microstructure must be a numpy array")
+        
+        if len(microstructure.shape) != 3:
+            raise ValidationError("Microstructure must be 3D")
+        
+        if not np.isfinite(microstructure).all():
+            raise ValidationError("Microstructure contains non-finite values")
+        
+        return True
+    
+    def validate_parameters(self, parameters: Dict[str, float], process: str = "lpbf") -> bool:
+        """Validate process parameters."""
+        required_params = ["laser_power", "scan_speed", "layer_thickness", "hatch_spacing"]
+        
+        for param in required_params:
+            if param not in parameters:
+                raise ValidationError(f"Missing required parameter: {param}")
+            
+            if not isinstance(parameters[param], (int, float)):
+                raise ValidationError(f"Parameter {param} must be numeric")
+            
+            if not np.isfinite(parameters[param]):
+                raise ValidationError(f"Parameter {param} is not finite")
+        
+        return True
+    
+    def validate_input_security(self, data: Any) -> bool:
+        """Validate inputs for security threats."""
+        # Basic security validation
+        if isinstance(data, str) and len(data) > 10000:
+            raise SecurityError("Input string too long")
+        
+        return True
+
+
 def validation_wrapper(validate_inputs: bool = True, validate_outputs: bool = False):
     """Decorator for automatic input/output validation."""
     

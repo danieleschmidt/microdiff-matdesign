@@ -19,6 +19,31 @@ from .models.encoders import MicrostructureEncoder
 from .models.decoders import ParameterDecoder
 from .utils.validation import validate_microstructure, validate_parameters
 from .utils.preprocessing import normalize_microstructure, denormalize_parameters
+from .utils.error_handling import handle_errors, error_context, validate_input, ValidationError, ModelError, ProcessingError
+from .utils.logging_config import get_logger, with_logging, LoggingContextManager
+from .utils.robust_validation import RobustValidator
+
+# Optional imports for Generation 3 features with graceful fallback
+try:
+    from .utils.performance import PerformanceConfig, ResourceManager, ParallelProcessor
+    PERFORMANCE_AVAILABLE = True
+except ImportError:
+    PerformanceConfig = ResourceManager = ParallelProcessor = None
+    PERFORMANCE_AVAILABLE = False
+
+try:
+    from .utils.caching import CacheManager, CacheConfig
+    CACHING_AVAILABLE = True
+except ImportError:
+    CacheManager = CacheConfig = None
+    CACHING_AVAILABLE = False
+
+try:
+    from .utils.scaling import LoadBalancer, ScalingConfig
+    SCALING_AVAILABLE = True
+except ImportError:
+    LoadBalancer = ScalingConfig = None
+    SCALING_AVAILABLE = False
 
 
 class ProcessParameters:
@@ -60,12 +85,60 @@ class MicrostructureDiffusion:
         process: str = "laser_powder_bed_fusion",
         pretrained: bool = True,
         model_path: Optional[str] = None,
-        device: Optional[str] = None
+        device: Optional[str] = None,
+        enable_validation: bool = True,
+        safety_checks: bool = True,
+        enable_scaling: bool = True,
+        enable_caching: bool = True,
+        performance_config: Optional[PerformanceConfig] = None
     ):
         """Initialize the diffusion model."""
-        self.alloy = alloy
-        self.process = process
-        self.pretrained = pretrained
+        self.logger = get_logger('core.MicrostructureDiffusion')
+        
+        with LoggingContextManager(self.logger, "model_initialization"):
+            # Validate inputs
+            if enable_validation:
+                self.validator = RobustValidator()
+                self._validate_initialization_params(alloy, process, device)
+            
+            self.alloy = alloy
+            self.process = process
+            self.pretrained = pretrained
+            self.enable_validation = enable_validation
+            self.safety_checks = safety_checks
+            self.enable_scaling = enable_scaling
+            self.enable_caching = enable_caching
+            
+            # Initialize performance and scaling components for Generation 3
+            if PERFORMANCE_AVAILABLE and performance_config is None:
+                self.performance_config = PerformanceConfig()
+            else:
+                self.performance_config = performance_config
+            
+            if enable_scaling and PERFORMANCE_AVAILABLE and SCALING_AVAILABLE:
+                self.resource_manager = ResourceManager(self.performance_config)
+                self.parallel_processor = ParallelProcessor(self.performance_config)
+                self.load_balancer = LoadBalancer(ScalingConfig())
+                self.logger.info("Scaling capabilities enabled")
+            else:
+                self.resource_manager = None
+                self.parallel_processor = None
+                self.load_balancer = None
+                if enable_scaling:
+                    self.logger.warning("Scaling requested but dependencies unavailable - using fallback mode")
+            
+            if enable_caching and CACHING_AVAILABLE:
+                cache_config = CacheConfig(
+                    max_size=1000,  # Cache up to 1000 inference results
+                    ttl_seconds=3600,  # 1 hour TTL
+                    enable_disk_cache=True
+                )
+                self.cache_manager = CacheManager(cache_config)
+                self.logger.info("Intelligent caching enabled")
+            else:
+                self.cache_manager = None
+                if enable_caching:
+                    self.logger.warning("Caching requested but dependencies unavailable - using fallback mode")
         
         # Device setup
         if device is None:
@@ -101,6 +174,243 @@ class MicrostructureDiffusion:
             
         # Set to evaluation mode by default
         self.eval()
+            
+    def _validate_initialization_params(self, alloy: str, process: str, device: Optional[str]):
+        """Validate initialization parameters."""
+        valid_alloys = {"Ti-6Al-4V", "Inconel-718", "AlSi10Mg", "316L"}
+        valid_processes = {"laser_powder_bed_fusion", "electron_beam_melting", "directed_energy_deposition"}
+        
+        validate_input(
+            alloy in valid_alloys,
+            f"Unsupported alloy: {alloy}. Supported: {valid_alloys}",
+            ValidationError
+        )
+        
+        validate_input(
+            process in valid_processes,
+            f"Unsupported process: {process}. Supported: {valid_processes}",
+            ValidationError
+        )
+        
+        if device is not None:
+            validate_input(
+                device in {"cpu", "cuda", "auto"},
+                f"Invalid device: {device}. Must be 'cpu', 'cuda', or 'auto'",
+                ValidationError
+            )
+    
+    def _validate_inverse_design_inputs(self, microstructure: np.ndarray, 
+                                      num_samples: int, guidance_scale: float):
+        """Validate inputs for inverse design."""
+        # Microstructure validation
+        validate_input(
+            isinstance(microstructure, np.ndarray),
+            "Microstructure must be a numpy array",
+            ValidationError
+        )
+        
+        validate_input(
+            len(microstructure.shape) == 3,
+            f"Microstructure must be 3D, got shape {microstructure.shape}",
+            ValidationError
+        )
+        
+        validate_input(
+            microstructure.size > 0,
+            "Microstructure cannot be empty",
+            ValidationError
+        )
+        
+        # Check for NaN or infinite values
+        validate_input(
+            np.isfinite(microstructure).all(),
+            "Microstructure contains NaN or infinite values",
+            ValidationError
+        )
+        
+        # Parameter validation
+        validate_input(
+            isinstance(num_samples, int) and num_samples > 0,
+            f"num_samples must be positive integer, got {num_samples}",
+            ValidationError
+        )
+        
+        validate_input(
+            isinstance(guidance_scale, (int, float)) and guidance_scale > 0,
+            f"guidance_scale must be positive number, got {guidance_scale}",
+            ValidationError
+        )
+        
+        # Performance warnings
+        if num_samples > 50:
+            self.logger.warning(f"Large num_samples ({num_samples}) may be slow")
+        
+        if guidance_scale > 20:
+            self.logger.warning(f"High guidance_scale ({guidance_scale}) may cause artifacts")
+    
+    def _get_parameter_bounds(self) -> Dict[str, np.ndarray]:
+        """Get process-specific parameter bounds."""
+        if self.process == "laser_powder_bed_fusion":
+            return {
+                'min': np.array([50.0, 200.0, 10.0, 50.0, 25.0]),
+                'max': np.array([500.0, 2000.0, 100.0, 300.0, 200.0]),
+                'default': np.array([200.0, 800.0, 30.0, 120.0, 80.0])
+            }
+        elif self.process == "electron_beam_melting":
+            return {
+                'min': np.array([100.0, 50.0, 20.0, 80.0, 200.0]),
+                'max': np.array([1000.0, 500.0, 150.0, 400.0, 600.0]),
+                'default': np.array([400.0, 200.0, 50.0, 150.0, 350.0])
+            }
+        else:  # Default bounds
+            return {
+                'min': np.array([100.0, 400.0, 20.0, 80.0, 50.0]),
+                'max': np.array([400.0, 1500.0, 80.0, 250.0, 150.0]),
+                'default': np.array([200.0, 800.0, 30.0, 120.0, 80.0])
+            }
+    
+    def _assess_sample_quality(self, parameter_samples: np.ndarray) -> str:
+        """Assess the quality of parameter samples."""
+        if len(parameter_samples) < 2:
+            return "insufficient_samples"
+        
+        # Calculate coefficient of variation for each parameter
+        means = np.mean(parameter_samples, axis=0)
+        stds = np.std(parameter_samples, axis=0)
+        
+        # Avoid division by zero
+        cvs = np.where(means != 0, stds / np.abs(means), np.inf)
+        avg_cv = np.mean(cvs[np.isfinite(cvs)])
+        
+        if avg_cv < 0.1:
+            return "high_confidence"
+        elif avg_cv < 0.3:
+            return "medium_confidence"
+        elif avg_cv < 0.5:
+            return "low_confidence"
+        else:
+            return "very_uncertain"
+    
+    def _generate_cache_key(self, microstructure: np.ndarray, num_samples: int, 
+                           guidance_scale: float, uncertainty_quantification: bool) -> str:
+        """Generate a cache key for inverse design results."""
+        import hashlib
+        
+        # Create hash of microstructure
+        microstructure_hash = hashlib.md5(microstructure.tobytes()).hexdigest()[:16]
+        
+        # Create cache key from parameters
+        cache_key = (
+            f"inverse_design_{microstructure_hash}_{self.alloy}_{self.process}_"
+            f"{num_samples}_{guidance_scale:.2f}_{uncertainty_quantification}"
+        )
+        return cache_key
+    
+    def _generate_samples_sequential(self, latent_encoding: torch.Tensor, 
+                                   num_samples: int, guidance_scale: float) -> List[np.ndarray]:
+        """Generate samples sequentially (original approach)."""
+        parameter_samples = []
+        
+        for sample_idx in range(num_samples):
+            try:
+                # Sample noise and condition on microstructure encoding
+                noise = torch.randn(latent_encoding.shape, device=self.device)
+                
+                # Iterative denoising with guidance
+                denoised_latent = self.diffusion_model.sample(
+                    noise, 
+                    condition=latent_encoding,
+                    guidance_scale=guidance_scale
+                )
+                
+                # Safety check for denoised latent
+                if self.safety_checks:
+                    validate_input(
+                        torch.isfinite(denoised_latent).all(),
+                        f"Diffusion model produced non-finite values at sample {sample_idx}",
+                        ModelError
+                    )
+                
+                # Decode to process parameters
+                parameter_tensor = self.decoder(denoised_latent)
+                
+                # Safety check for parameters
+                if self.safety_checks:
+                    validate_input(
+                        torch.isfinite(parameter_tensor).all(),
+                        f"Decoder produced non-finite values at sample {sample_idx}",
+                        ModelError
+                    )
+                
+                parameter_samples.append(parameter_tensor.cpu().numpy())
+                
+            except Exception as e:
+                self.logger.warning(f"Failed to generate sample {sample_idx}: {e}")
+                if len(parameter_samples) == 0 and sample_idx == num_samples - 1:
+                    raise ProcessingError(
+                        f"Failed to generate any valid samples after {num_samples} attempts"
+                    ) from e
+                continue
+                
+        return parameter_samples
+    
+    def _generate_samples_parallel(self, latent_encoding: torch.Tensor, 
+                                 num_samples: int, guidance_scale: float,
+                                 batch_size: int) -> List[np.ndarray]:
+        """Generate samples in parallel batches for better performance."""
+        parameter_samples = []
+        
+        # Split into batches for parallel processing
+        batches = []
+        for i in range(0, num_samples, batch_size):
+            batch_samples = min(batch_size, num_samples - i)
+            batches.append(batch_samples)
+        
+        # Process batches in parallel using ThreadPoolExecutor for I/O bound operations
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        def generate_batch(batch_size: int) -> List[np.ndarray]:
+            """Generate a batch of samples."""
+            batch_results = []
+            for _ in range(batch_size):
+                try:
+                    noise = torch.randn(latent_encoding.shape, device=self.device)
+                    denoised_latent = self.diffusion_model.sample(
+                        noise, condition=latent_encoding, guidance_scale=guidance_scale
+                    )
+                    
+                    if self.safety_checks and not torch.isfinite(denoised_latent).all():
+                        continue
+                        
+                    parameter_tensor = self.decoder(denoised_latent)
+                    
+                    if self.safety_checks and not torch.isfinite(parameter_tensor).all():
+                        continue
+                        
+                    batch_results.append(parameter_tensor.cpu().numpy())
+                except Exception as e:
+                    self.logger.warning(f"Failed to generate sample in batch: {e}")
+                    continue
+            return batch_results
+        
+        # Execute batches in parallel
+        max_workers = min(len(batches), 
+                         self.resource_manager.optimal_thread_workers if self.resource_manager else 2)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_batch = {
+                executor.submit(generate_batch, batch_size): batch_size 
+                for batch_size in batches
+            }
+            
+            for future in as_completed(future_to_batch):
+                try:
+                    batch_results = future.result(timeout=30)  # 30 second timeout per batch
+                    parameter_samples.extend(batch_results)
+                except Exception as e:
+                    self.logger.error(f"Batch processing failed: {e}")
+        
+        self.logger.info(f"Parallel generation completed: {len(parameter_samples)} samples from {len(batches)} batches")
+        return parameter_samples
         
     def _load_config(self) -> Dict[str, Any]:
         """Load model configuration."""
@@ -146,88 +456,201 @@ class MicrostructureDiffusion:
         self.diffusion_model.eval()
         self.decoder.eval()
         
+    @handle_errors(operation="inverse_design", reraise=True)
+    @with_logging("inverse_design")
     def inverse_design(
         self,
         target_microstructure: np.ndarray,
         num_samples: int = 10,
         guidance_scale: float = 7.5,
-        uncertainty_quantification: bool = False
+        uncertainty_quantification: bool = False,
+        enable_parallel: Optional[bool] = None,
+        batch_size: Optional[int] = None
     ) -> Union[ProcessParameters, Tuple[ProcessParameters, Dict[str, float]]]:
         """Generate process parameters from target microstructure."""
         
-        # Validate input
-        validate_microstructure(target_microstructure)
+        # Generation 3: Check cache first for performance
+        cache_key = None
+        if self.enable_caching and self.cache_manager is not None:
+            cache_key = self._generate_cache_key(
+                target_microstructure, num_samples, guidance_scale, uncertainty_quantification
+            )
+            cached_result = self.cache_manager.get(cache_key)
+            if cached_result is not None:
+                self.logger.info("Returning cached result for inverse design")
+                return cached_result
         
-        # Preprocess microstructure
-        microstructure_tensor = normalize_microstructure(target_microstructure)
-        microstructure_tensor = torch.from_numpy(microstructure_tensor).float().to(self.device)
+        # Determine parallel processing settings
+        use_parallel = enable_parallel if enable_parallel is not None else (
+            self.enable_scaling and self.resource_manager is not None and num_samples >= 4
+        )
+        effective_batch_size = batch_size or min(num_samples, 4)
         
-        if len(microstructure_tensor.shape) == 3:
-            microstructure_tensor = microstructure_tensor.unsqueeze(0)  # Add batch dimension
-            
-        with torch.no_grad():
-            # Encode microstructure to latent space
-            latent_encoding = self.encoder(microstructure_tensor.flatten(1))
-            
-            # Generate multiple samples for uncertainty quantification
-            parameter_samples = []
-            
-            for _ in range(num_samples):
-                # Sample noise and condition on microstructure encoding
-                noise = torch.randn(latent_encoding.shape, device=self.device)
+        if use_parallel:
+            self.logger.info(f"Using parallel processing with batch_size={effective_batch_size}")
+        
+        # Enhanced validation for Generation 2
+        if self.enable_validation:
+            self._validate_inverse_design_inputs(
+                target_microstructure, num_samples, guidance_scale
+            )
+        
+        with error_context("microstructure_validation"):
+            validate_microstructure(target_microstructure)
+        
+        try:
+            # Preprocess microstructure with error handling
+            with error_context("microstructure_preprocessing"):
+                microstructure_tensor = normalize_microstructure(target_microstructure)
+                microstructure_tensor = torch.from_numpy(microstructure_tensor).float().to(self.device)
                 
-                # Iterative denoising with guidance
-                denoised_latent = self.diffusion_model.sample(
-                    noise, 
-                    condition=latent_encoding,
-                    guidance_scale=guidance_scale
+                if len(microstructure_tensor.shape) == 3:
+                    microstructure_tensor = microstructure_tensor.unsqueeze(0)  # Add batch dimension
+            
+            # Model inference with comprehensive error handling    
+            with torch.no_grad():
+                with error_context("microstructure_encoding"):
+                    # Encode microstructure to latent space
+                    latent_encoding = self.encoder(microstructure_tensor.flatten(1))
+                    
+                    # Validate latent encoding
+                    if self.safety_checks:
+                        validate_input(
+                            torch.isfinite(latent_encoding).all(),
+                            "Encoder produced non-finite values",
+                            ModelError
+                        )
+                
+                # Generate multiple samples with parallel processing for Generation 3
+                parameter_samples = []
+                
+                with error_context("parameter_generation"):
+                    if use_parallel and self.enable_scaling and self.resource_manager is not None:
+                        # Parallel sample generation for better performance
+                        parameter_samples = self._generate_samples_parallel(
+                            latent_encoding, num_samples, guidance_scale, effective_batch_size
+                        )
+                    else:
+                        # Sequential generation (original approach)
+                        parameter_samples = self._generate_samples_sequential(
+                            latent_encoding, num_samples, guidance_scale
+                        )
+        
+        except torch.cuda.OutOfMemoryError as e:
+            raise ResourceError(
+                "CUDA out of memory during inference. Try reducing num_samples or input size."
+            ) from e
+        except Exception as e:
+            raise ProcessingError(f"Model inference failed: {str(e)}") from e
+                
+        # Robust parameter processing
+        if len(parameter_samples) == 0:
+            raise ProcessingError("No valid parameter samples generated")
+        
+        with error_context("parameter_processing"):
+            # Convert to ProcessParameters objects
+            parameter_samples = np.array(parameter_samples)
+            self.logger.info(f"Generated {len(parameter_samples)} parameter samples")
+            
+            # Validate parameter samples
+            if self.safety_checks:
+                validate_input(
+                    np.isfinite(parameter_samples).all(),
+                    "Parameter samples contain non-finite values",
+                    ModelError
+                )
+            
+            # Denormalize parameters with error handling
+            try:
+                denormalized_params = denormalize_parameters(parameter_samples)
+            except Exception as e:
+                raise ProcessingError(f"Parameter denormalization failed: {e}") from e
+            
+            # Calculate statistics
+            try:
+                mean_params = np.mean(denormalized_params, axis=0)
+                
+                # Handle both single sample and batch cases
+                if mean_params.ndim > 1:
+                    mean_params = mean_params[0]  # Take first sample if batch
+                
+                # Robust parameter bounds for different processes
+                bounds = self._get_parameter_bounds()
+                
+                # Clip parameters to valid ranges
+                clipped_params = np.clip(mean_params, bounds['min'], bounds['max'])
+                
+                # Log if significant clipping occurred
+                if np.any(np.abs(clipped_params - mean_params) > 0.1 * mean_params):
+                    self.logger.warning("Significant parameter clipping occurred - model may need retraining")
+                
+                # Create ProcessParameters object with robust defaults
+                result_params = ProcessParameters(
+                    laser_power=float(clipped_params[0]) if len(clipped_params) > 0 else bounds['default'][0],
+                    scan_speed=float(clipped_params[1]) if len(clipped_params) > 1 else bounds['default'][1],
+                    layer_thickness=float(clipped_params[2]) if len(clipped_params) > 2 else bounds['default'][2],
+                    hatch_spacing=float(clipped_params[3]) if len(clipped_params) > 3 else bounds['default'][3],
+                    powder_bed_temp=float(clipped_params[4]) if len(clipped_params) > 4 else bounds['default'][4]
                 )
                 
-                # Decode to process parameters
-                parameter_tensor = self.decoder(denoised_latent)
-                parameter_samples.append(parameter_tensor.cpu().numpy())
-                
-        # Convert to ProcessParameters objects
-        parameter_samples = np.array(parameter_samples)
+            except Exception as e:
+                raise ProcessingError(f"Parameter statistics calculation failed: {e}") from e
         
-        # Denormalize parameters
-        denormalized_params = denormalize_parameters(parameter_samples)
+        # Validate final parameters
+        with error_context("parameter_validation"):
+            validate_parameters(result_params.to_dict(), self.process)
         
-        # Calculate statistics
-        mean_params = np.mean(denormalized_params, axis=0)
-        
-        # Create ProcessParameters object with mean values
-        # Handle both single sample and batch cases
-        if mean_params.ndim > 1:
-            mean_params = mean_params[0]  # Take first sample if batch
-            
-        # Clip parameters to valid ranges for untrained model
-        clipped_params = np.clip(mean_params, 
-                               [100.0, 400.0, 20.0, 80.0, 50.0],  # mins
-                               [400.0, 1500.0, 80.0, 250.0, 150.0])  # maxs
-        
-        result_params = ProcessParameters(
-            laser_power=float(clipped_params[0]) if len(clipped_params) > 0 else 200.0,
-            scan_speed=float(clipped_params[1]) if len(clipped_params) > 1 else 800.0,
-            layer_thickness=float(clipped_params[2]) if len(clipped_params) > 2 else 30.0,
-            hatch_spacing=float(clipped_params[3]) if len(clipped_params) > 3 else 120.0,
-            powder_bed_temp=float(clipped_params[4]) if len(clipped_params) > 4 else 80.0
-        )
-        
-        validate_parameters(result_params.to_dict(), self.process)
-        
+        # Enhanced uncertainty quantification
         if uncertainty_quantification:
-            # Calculate uncertainty metrics
-            std_params = np.std(denormalized_params, axis=0)
-            uncertainty = {
-                'laser_power_std': float(std_params[0]),
-                'scan_speed_std': float(std_params[1]),
-                'layer_thickness_std': float(std_params[2]),
-                'hatch_spacing_std': float(std_params[3]),
-                'confidence_interval': 0.95
-            }
-            return result_params, uncertainty
-            
+            with error_context("uncertainty_calculation"):
+                try:
+                    # Calculate robust uncertainty metrics
+                    std_params = np.std(denormalized_params, axis=0)
+                    
+                    # Calculate confidence intervals (assuming normal distribution)
+                    confidence_level = 0.95
+                    z_score = 1.96  # For 95% confidence
+                    
+                    # Create comprehensive uncertainty dictionary
+                    uncertainty = {
+                        'laser_power_std': float(std_params[0]) if len(std_params) > 0 else 0.0,
+                        'scan_speed_std': float(std_params[1]) if len(std_params) > 1 else 0.0,
+                        'layer_thickness_std': float(std_params[2]) if len(std_params) > 2 else 0.0,
+                        'hatch_spacing_std': float(std_params[3]) if len(std_params) > 3 else 0.0,
+                        'powder_bed_temp_std': float(std_params[4]) if len(std_params) > 4 else 0.0,
+                        'confidence_level': confidence_level,
+                        'num_samples': len(parameter_samples),
+                        'sample_quality': self._assess_sample_quality(denormalized_params)
+                    }
+                    
+                    # Add confidence intervals
+                    param_names = ['laser_power', 'scan_speed', 'layer_thickness', 'hatch_spacing', 'powder_bed_temp']
+                    for i, param_name in enumerate(param_names[:len(mean_params)]):
+                        margin_of_error = z_score * std_params[i] / np.sqrt(len(parameter_samples))
+                        uncertainty[f'{param_name}_ci_lower'] = float(mean_params[i] - margin_of_error)
+                        uncertainty[f'{param_name}_ci_upper'] = float(mean_params[i] + margin_of_error)
+                    
+                    # Log uncertainty assessment
+                    avg_uncertainty = np.mean(std_params[:len(mean_params)])
+                    if avg_uncertainty > 0.2 * np.mean(mean_params):
+                        self.logger.warning(f"High parameter uncertainty detected (avg std: {avg_uncertainty:.2f})")
+                    
+                    self.logger.info(f"Uncertainty quantification completed for {len(parameter_samples)} samples")
+                    
+                    return result_params, uncertainty
+                    
+                except Exception as e:
+                    self.logger.error(f"Uncertainty quantification failed: {e}")
+                    # Return parameters without uncertainty if calculation fails
+                    return result_params, {'error': f'Uncertainty calculation failed: {str(e)}'}
+        
+        # Cache the result for future use (Generation 3)
+        if self.enable_caching and cache_key is not None and self.cache_manager is not None:
+            result_to_cache = (result_params, uncertainty) if uncertainty_quantification else result_params
+            self.cache_manager.set(cache_key, result_to_cache)
+            self.logger.info("Cached inverse design result")
+        
+        self.logger.info("Inverse design completed successfully")
         return result_params
     
     def predict_microstructure(

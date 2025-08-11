@@ -1,8 +1,15 @@
 """Monitoring and health check system for MicroDiff-MatDesign."""
 
 import time
-import psutil
 import threading
+
+# Optional psutil import with fallback
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    psutil = None
+    PSUTIL_AVAILABLE = False
 from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
