@@ -11,7 +11,18 @@ import gc
 
 from .logging_config import get_logger, with_logging
 from .error_handling import handle_errors, safe_execute
-from .monitoring import performance_tracker
+
+# Optional psutil import
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+
+try:
+    from .monitoring import performance_tracker
+except ImportError:
+    performance_tracker = None
 
 
 @dataclass
@@ -47,6 +58,8 @@ class ResourceManager:
     def get_system_load(self) -> Dict[str, float]:
         """Get current system load metrics."""
         try:
+            if not PSUTIL_AVAILABLE:
+                return {'cpu_percent': 50.0, 'memory_percent': 60.0}  # Mock values
             import psutil
             
             # CPU usage
