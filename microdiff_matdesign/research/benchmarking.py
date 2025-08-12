@@ -528,7 +528,7 @@ class BenchmarkSuite:
     def _generate_benchmark_plots(self, results: BenchmarkResults, output_dir: Path):
         """Generate comprehensive benchmark plots."""
         
-        plt.style.use('seaborn-v0_8')
+        plt.style.use('seaborn-v0_8' if 'seaborn-v0_8' in plt.style.available else 'default')
         
         # Performance comparison plot
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
