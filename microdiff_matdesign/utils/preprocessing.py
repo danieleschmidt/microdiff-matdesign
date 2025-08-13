@@ -61,6 +61,9 @@ def normalize_microstructure(microstructure: np.ndarray,
     if not np.issubdtype(microstructure.dtype, np.floating):
         microstructure = microstructure.astype(np.float32)
     
+    # Initialize normalized to handle all edge cases
+    normalized = None
+    
     # Handle different normalization methods
     if method == "standardize":
         # Z-score normalization
@@ -80,7 +83,7 @@ def normalize_microstructure(microstructure: np.ndarray,
         
         if max_val - min_val < 1e-8:
             warnings.warn("Constant microstructure values detected")
-            normalized = np.zeros_like(microstructure)
+            normalized = np.clip(microstructure, 0, 1)  # Return clipped constant values
         else:
             normalized = (microstructure - min_val) / (max_val - min_val)
     
@@ -111,6 +114,11 @@ def normalize_microstructure(microstructure: np.ndarray,
     
     else:
         raise ValueError(f"Unknown normalization method: {method}")
+    
+    # Safety check for uninitialized normalized
+    if normalized is None:
+        warnings.warn("Normalization failed, using fallback clipping")
+        normalized = np.clip(microstructure, 0, 1)
     
     return normalized.astype(np.float32)
 
