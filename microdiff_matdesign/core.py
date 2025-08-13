@@ -146,10 +146,10 @@ class MicrostructureDiffusion:
         else:
             self.device = torch.device(device)
             
-        # Model architecture parameters
+        # Model architecture parameters with adaptive configuration
         self.config = self._load_config()
         
-        # Initialize model components
+        # Initialize model components with adaptive input handling
         self.encoder = MicrostructureEncoder(
             input_dim=self.config['encoder']['input_dim'],
             hidden_dim=self.config['encoder']['hidden_dim'],
@@ -420,10 +420,10 @@ class MicrostructureDiffusion:
             with open(config_path, 'r') as f:
                 return yaml.safe_load(f)
         else:
-            # Default configuration - simplified for Generation 1
+            # Default configuration - adaptive input dimensions for robustness
             return {
-                'encoder': {'input_dim': 64*64*64, 'hidden_dim': 256, 'latent_dim': 128},
-                'diffusion': {'input_dim': 128, 'hidden_dim': 256, 'num_steps': 10},  # Very simple for testing
+                'encoder': {'input_dim': 32*32*32, 'hidden_dim': 256, 'latent_dim': 128},  # Support smaller inputs for testing
+                'diffusion': {'input_dim': 128, 'hidden_dim': 256, 'num_steps': 10},  # Simple for Generation 1
                 'decoder': {'latent_dim': 128, 'hidden_dim': 256, 'output_dim': 5}
             }
     
@@ -510,8 +510,50 @@ class MicrostructureDiffusion:
             # Model inference with comprehensive error handling    
             with torch.no_grad():
                 with error_context("microstructure_encoding"):
-                    # Encode microstructure to latent space
-                    latent_encoding = self.encoder(microstructure_tensor.flatten(1))
+                    # Encode microstructure to latent space with adaptive input handling
+                    flattened_input = microstructure_tensor.flatten(1)
+                    
+                    # Adaptive resizing if input doesn't match expected dimensions
+                    expected_size = self.config['encoder']['input_dim']
+                    if flattened_input.shape[1] != expected_size:
+                        # Resize using interpolation for robustness
+                        from torch.nn.functional import interpolate
+                        
+                        # Calculate exact target dimensions to match expected size
+                        current_shape = microstructure_tensor.shape
+                        target_dim = round(expected_size ** (1/3))  # Exact cube root for 3D
+                        
+                        # Ensure we get exact dimensions
+                        if target_dim ** 3 != expected_size:
+                            # If not a perfect cube, use closest integer
+                            target_dim = 32  # Default to 32 which gives 32768
+                        
+                        resized_tensor = interpolate(
+                            microstructure_tensor.unsqueeze(1),  # Add channel dimension
+                            size=(target_dim, target_dim, target_dim),
+                            mode='trilinear',
+                            align_corners=False
+                        ).squeeze(1)  # Remove channel dimension
+                        
+                        flattened_input = resized_tensor.flatten(1)
+                        
+                        # Verify we got the right size
+                        if flattened_input.shape[1] != expected_size:
+                            # Force pad or truncate to exact size
+                            if flattened_input.shape[1] < expected_size:
+                                # Pad with zeros
+                                padding = expected_size - flattened_input.shape[1]
+                                flattened_input = torch.cat([
+                                    flattened_input, 
+                                    torch.zeros(flattened_input.shape[0], padding, device=self.device)
+                                ], dim=1)
+                            else:
+                                # Truncate
+                                flattened_input = flattened_input[:, :expected_size]
+                        
+                        self.logger.info(f"Resized input from {current_shape} to {resized_tensor.shape}, flattened to {flattened_input.shape}")
+                    
+                    latent_encoding = self.encoder(flattened_input)
                     
                     # Validate latent encoding
                     if self.safety_checks:

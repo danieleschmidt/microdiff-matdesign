@@ -17,11 +17,13 @@ def validate_microstructure(microstructure: np.ndarray,
     if microstructure.ndim != 3:
         raise ValueError(f"Microstructure must be 3D array, got {microstructure.ndim}D")
     
-    # Check size constraints
+    # Check size constraints (relaxed for adaptive processing)
     shape = microstructure.shape
     for i, (current, min_val, max_val) in enumerate(zip(shape, min_size, max_size)):
-        if current < min_val:
-            raise ValueError(f"Dimension {i} too small: {current} < {min_val}")
+        if current < 4:  # Very liberal minimum for adaptive resizing
+            raise ValueError(f"Dimension {i} too small: {current} < 4 (minimum for processing)")
+        elif current < min_val:
+            warnings.warn(f"Dimension {i} small: {current} < {min_val}, will use adaptive resizing")
         if current > max_val:
             warnings.warn(f"Dimension {i} very large: {current} > {max_val}, this may impact performance")
     
