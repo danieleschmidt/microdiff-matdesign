@@ -1,0 +1,123 @@
+{
+  "timestamp": 1755241929.059267,
+  "overall_passed": false,
+  "critical_failures": 1,
+  "gates_passed": 4,
+  "gates_total": 5,
+  "overall_score": 0.7433333333333334,
+  "total_duration": 0.4467489719390869,
+  "results": [
+    {
+      "gate": "Security Scan",
+      "passed": false,
+      "level": "critical",
+      "score": 0.0,
+      "message": "Security scan: 46 issues found",
+      "duration": 0.02262258529663086,
+      "details": {
+        "security_issues": [
+          "test_basic_functionality_standalone.py:60 - Potentially dangerous: eval(",
+          "test_comprehensive_system.py:110 - Potentially dangerous: input(",
+          "test_comprehensive_system.py:118 - Potentially dangerous: input(",
+          "test_generation2_robust.py:57 - Potentially dangerous: input(",
+          "test_research_validation.py:248 - Potentially dangerous: eval(",
+          "test_robust_standalone.py:118 - Potentially dangerous: input(",
+          "test_robust_standalone.py:123 - Potentially dangerous: input(",
+          "test_robust_validation.py:486 - Potentially dangerous: input(",
+          "test_robust_validation.py:516 - Potentially dangerous: input(",
+          "quality_gates.py:146 - Potentially dangerous: eval(",
+          "quality_gates.py:147 - Potentially dangerous: exec(",
+          "quality_gates.py:148 - Potentially dangerous: subprocess.call(",
+          "quality_gates.py:149 - Potentially dangerous: os.system(",
+          "quality_gates.py:150 - Potentially dangerous: input(",
+          "quality_gates.py:151 - Potentially dangerous: input(",
+          "quality_gates.py:151 - Potentially dangerous: raw_input(",
+          "quality_gates.py:152 - Potentially dangerous: pickle.loads(",
+          "quality_gates.py:153 - Potentially dangerous: yaml.load(",
+          "quality_gates.py:154 - Potentially dangerous: shell=True",
+          "microdiff_matdesign/core.py:176 - Potentially dangerous: eval(",
+          "microdiff_matdesign/core.py:453 - Potentially dangerous: eval(",
+          "microdiff_matdesign/core.py:455 - Potentially dangerous: eval(",
+          "microdiff_matdesign/core.py:456 - Potentially dangerous: eval(",
+          "microdiff_matdesign/core.py:457 - Potentially dangerous: eval(",
+          "microdiff_matdesign/core.py:917 - Potentially dangerous: eval(",
+          "microdiff_matdesign/core.py:923 - Potentially dangerous: eval(",
+          "microdiff_matdesign/core.py:183 - Potentially dangerous: input(",
+          "microdiff_matdesign/core.py:189 - Potentially dangerous: input(",
+          "microdiff_matdesign/core.py:196 - Potentially dangerous: input(",
+          "microdiff_matdesign/core.py:206 - Potentially dangerous: input(",
+          "microdiff_matdesign/core.py:212 - Potentially dangerous: input(",
+          "microdiff_matdesign/core.py:218 - Potentially dangerous: input(",
+          "microdiff_matdesign/core.py:225 - Potentially dangerous: input(",
+          "microdiff_matdesign/core.py:232 - Potentially dangerous: input(",
+          "microdiff_matdesign/core.py:238 - Potentially dangerous: input(",
+          "microdiff_matdesign/core.py:328 - Potentially dangerous: input(",
+          "microdiff_matdesign/core.py:339 - Potentially dangerous: input(",
+          "microdiff_matdesign/core.py:560 - Potentially dangerous: input(",
+          "microdiff_matdesign/core.py:599 - Potentially dangerous: input(",
+          "microdiff_matdesign/models/bayesian_uncertainty.py:510 - Potentially dangerous: eval(",
+          "microdiff_matdesign/models/decoders.py:117 - Potentially dangerous: eval(",
+          "microdiff_matdesign/models/hierarchical_multiscale.py:502 - Potentially dangerous: eval(",
+          "microdiff_matdesign/research/benchmarking.py:369 - Potentially dangerous: eval(",
+          "microdiff_matdesign/utils/error_handling.py:269 - Potentially dangerous: input(",
+          "microdiff_matdesign/utils/robust_validation.py:463 - Potentially dangerous: input(",
+          "tests/e2e/test_cli.py:67 - Potentially dangerous: input("
+        ],
+        "files_scanned": 101
+      }
+    },
+    {
+      "gate": "Code Quality",
+      "passed": true,
+      "level": "high",
+      "score": 0.8,
+      "message": "Code quality check: 0 syntax errors, 8396 style issues",
+      "duration": 0.41236305236816406,
+      "details": {
+        "syntax_errors": [],
+        "style_issues": 8396,
+        "files_checked": 101
+      }
+    },
+    {
+      "gate": "Test Coverage",
+      "passed": true,
+      "level": "high",
+      "score": 1.0,
+      "message": "Estimated test coverage: 100.0%",
+      "duration": 0.010543584823608398,
+      "details": {
+        "coverage_percent": 100.0,
+        "minimum_required": 85.0,
+        "test_files": 43,
+        "source_files": 65
+      }
+    },
+    {
+      "gate": "Performance Benchmark",
+      "passed": true,
+      "level": "medium",
+      "score": 1.0,
+      "message": "Performance: avg import 0.000s, memory 50.0%",
+      "duration": 0.00029969215393066406,
+      "details": {
+        "avg_import_time": 3.417332967122396e-05,
+        "memory_usage_percent": 50.0,
+        "modules_tested": 3
+      }
+    },
+    {
+      "gate": "Documentation",
+      "passed": true,
+      "level": "medium",
+      "score": 0.9166666666666666,
+      "message": "Documentation score: 0.92 (0 issues)",
+      "duration": 0.0009200572967529297,
+      "details": {
+        "documentation_score": 5.5,
+        "max_score": 6.0,
+        "issues": []
+      }
+    }
+  ]
+}
