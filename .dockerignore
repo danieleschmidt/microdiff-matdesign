@@ -1,0 +1,201 @@
+# .dockerignore - Optimize Docker build context
+
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+LICENSE
+docs/
+*.md
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+htmlcov/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Linting and formatting
+.ruff_cache/
+.black/
+.flake8
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# Data and models (usually large)
+data/
+models/
+*.npy
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+*.ckpt
+*.pth
+*.pt
+*.safetensors
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# Jupyter notebooks (keep source, ignore output)
+.ipynb_checkpoints/
+
+# Cache directories
+.cache/
+.npm/
+.yarn/
+node_modules/
+
+# Build tools
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Docker files (avoid recursive builds)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+.pre-commit-config.yaml
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Large datasets and artifacts
+artifacts/
+experiments/
+checkpoints/
+wandB/
+mlruns/
+.mlflow/
+
+# Security and secrets
+*.key
+*.pem
+*.crt
+*.p12
+*.jks
+secrets/
+credentials/
+
+# Development scripts
+scripts/dev/
+scripts/local/
+dev-*.sh
+local-*.sh
+
+# Profiling output
+*.prof
+*.profile
+profiling/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Compressed files (unless needed)
+*.zip
+*.tar.gz
+*.tar.bz2
+*.rar
+*.7z
+
+# Keep specific files that might match patterns above
+!docs/requirements.txt
+!scripts/generate_test_fixtures.py
+!config/
+!.devcontainer/
+!tests/fixtures/
