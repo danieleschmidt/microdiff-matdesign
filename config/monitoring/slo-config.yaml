@@ -1,0 +1,279 @@
+# Service Level Objectives (SLO) Configuration
+# Defines SLIs, SLOs, and error budgets for MicroDiff-MatDesign
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: microdiff-slo-config
+  namespace: microdiff-production
+data:
+  slo-config.yaml: |
+    # Global SLO configuration
+    global:
+      evaluation_interval: "30s"
+      error_budget_burn_rate_threshold: 2.0
+      notification_cooldown: "5m"
+      
+    # Service Level Indicators (SLIs)
+    slis:
+      # Availability SLI
+      - name: "availability"
+        description: "Service availability based on successful requests"
+        type: "availability"
+        query: |
+          sum(rate(http_requests_total{job="microdiff-app", code!~"5.."}[5m])) /
+          sum(rate(http_requests_total{job="microdiff-app"}[5m]))
+        unit: "ratio"
+        
+      # Latency SLI
+      - name: "latency_p95"
+        description: "95th percentile response latency"
+        type: "latency"
+        query: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket{job="microdiff-app"}[5m]))
+          )
+        unit: "seconds"
+        
+      - name: "latency_p99"
+        description: "99th percentile response latency"
+        type: "latency"
+        query: |
+          histogram_quantile(0.99,
+            sum by (le) (rate(http_request_duration_seconds_bucket{job="microdiff-app"}[5m]))
+          )
+        unit: "seconds"
+        
+      # Inference latency SLI
+      - name: "inference_latency_p95"
+        description: "95th percentile model inference latency"
+        type: "latency"
+        query: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(microdiff_inference_duration_seconds_bucket[5m]))
+          )
+        unit: "seconds"
+        
+      # Throughput SLI
+      - name: "throughput"
+        description: "Request throughput (requests per second)"
+        type: "throughput"
+        query: |
+          sum(rate(http_requests_total{job="microdiff-app"}[5m]))
+        unit: "requests_per_second"
+        
+      # Error rate SLI
+      - name: "error_rate"
+        description: "Error rate for all requests"
+        type: "error_rate"
+        query: |
+          sum(rate(http_requests_total{job="microdiff-app", code=~"5.."}[5m])) /
+          sum(rate(http_requests_total{job="microdiff-app"}[5m]))
+        unit: "ratio"
+        
+      # Model accuracy SLI
+      - name: "model_accuracy"
+        description: "Current model accuracy score"
+        type: "quality"
+        query: "microdiff_model_accuracy_score"
+        unit: "ratio"
+        
+      # Data processing success rate
+      - name: "data_processing_success_rate"
+        description: "Success rate for data processing operations"
+        type: "reliability"
+        query: |
+          sum(rate(microdiff_data_processing_success_total[5m])) /
+          sum(rate(microdiff_data_processing_total[5m]))
+        unit: "ratio"
+        
+    # Service Level Objectives (SLOs)
+    slos:
+      # Critical user-facing SLOs
+      - name: "api_availability"
+        description: "API should be available 99.9% of the time"
+        sli: "availability"
+        target: 0.999
+        error_budget_period: "30d"
+        alerting:
+          burn_rate_short: 14.4  # 5% budget in 1 hour
+          burn_rate_long: 6      # 10% budget in 6 hours
+        
+      - name: "api_latency_p95"
+        description: "95% of API requests should complete within 2 seconds"
+        sli: "latency_p95"
+        target: 2.0
+        comparison: "<="
+        error_budget_period: "30d"
+        alerting:
+          burn_rate_short: 10
+          burn_rate_long: 5
+          
+      - name: "api_latency_p99"
+        description: "99% of API requests should complete within 5 seconds"
+        sli: "latency_p99"
+        target: 5.0
+        comparison: "<="
+        error_budget_period: "30d"
+        
+      # Model performance SLOs
+      - name: "inference_latency"
+        description: "95% of model inferences should complete within 10 seconds"
+        sli: "inference_latency_p95"
+        target: 10.0
+        comparison: "<="
+        error_budget_period: "30d"
+        alerting:
+          burn_rate_short: 8
+          burn_rate_long: 4
+          
+      - name: "model_accuracy_threshold"
+        description: "Model accuracy should remain above 85%"
+        sli: "model_accuracy"
+        target: 0.85
+        comparison: ">="
+        error_budget_period: "7d"
+        
+      # Reliability SLOs
+      - name: "error_rate_threshold"
+        description: "Error rate should stay below 1%"
+        sli: "error_rate"
+        target: 0.01
+        comparison: "<="
+        error_budget_period: "30d"
+        alerting:
+          burn_rate_short: 14.4
+          burn_rate_long: 6
+          
+      - name: "data_processing_reliability"
+        description: "Data processing should succeed 99.5% of the time"
+        sli: "data_processing_success_rate"
+        target: 0.995
+        comparison: ">="
+        error_budget_period: "30d"
+        
+      # Capacity SLOs
+      - name: "minimum_throughput"
+        description: "System should handle at least 10 requests per second"
+        sli: "throughput"
+        target: 10.0
+        comparison: ">="
+        error_budget_period: "24h"
+        
+    # Error Budget Policies
+    error_budget_policies:
+      - name: "critical_slo_policy"
+        description: "Policy for critical SLOs (availability, latency)"
+        applicable_slos:
+          - "api_availability"
+          - "api_latency_p95"
+          - "error_rate_threshold"
+        burn_rate_thresholds:
+          - consumption_rate: 0.05  # 5% of budget
+            duration: "1h"
+            action: "page"
+          - consumption_rate: 0.10  # 10% of budget
+            duration: "6h"
+            action: "ticket"
+          - consumption_rate: 0.20  # 20% of budget
+            duration: "24h"
+            action: "email"
+            
+      - name: "quality_slo_policy"
+        description: "Policy for quality-related SLOs"
+        applicable_slos:
+          - "model_accuracy_threshold"
+          - "inference_latency"
+        burn_rate_thresholds:
+          - consumption_rate: 0.10
+            duration: "2h"
+            action: "email"
+          - consumption_rate: 0.25
+            duration: "12h"
+            action: "ticket"
+            
+    # Alerting configuration
+    alerting:
+      # Burn rate alert rules
+      burn_rate_alerts:
+        - name: "SLOErrorBudgetBurnRateHigh"
+          expr: |
+            (
+              slo_error_budget_burn_rate{slo_name=~"api_availability|api_latency_p95|error_rate_threshold", duration="1h"} > 14.4
+            and
+              slo_error_budget_burn_rate{slo_name=~"api_availability|api_latency_p95|error_rate_threshold", duration="5m"} > 14.4
+            )
+          for: "2m"
+          labels:
+            severity: "critical"
+            slo_type: "critical"
+          annotations:
+            summary: "High error budget burn rate for critical SLO"
+            description: "SLO {{ $labels.slo_name }} is burning error budget at {{ $value }}x rate"
+            
+        - name: "SLOErrorBudgetBurnRateMedium"
+          expr: |
+            (
+              slo_error_budget_burn_rate{duration="6h"} > 6
+            and
+              slo_error_budget_burn_rate{duration="30m"} > 6
+            )
+          for: "15m"
+          labels:
+            severity: "warning"
+          annotations:
+            summary: "Medium error budget burn rate"
+            description: "SLO {{ $labels.slo_name }} is burning error budget at {{ $value }}x rate"
+            
+      # Error budget exhaustion alerts
+      budget_exhaustion_alerts:
+        - name: "SLOErrorBudgetExhaustion"
+          expr: "slo_error_budget_remaining{slo_name!='', period='30d'} < 0.05"
+          for: "5m"
+          labels:
+            severity: "warning"
+          annotations:
+            summary: "SLO error budget nearly exhausted"
+            description: "SLO {{ $labels.slo_name }} has less than 5% error budget remaining"
+            
+    # Dashboards configuration
+    dashboards:
+      - name: "SLO Overview"
+        description: "High-level SLO status dashboard"
+        panels:
+          - title: "SLO Status"
+            type: "stat"
+            targets:
+              - expr: "slo_current_status"
+          - title: "Error Budget Remaining"
+            type: "gauge"
+            targets:
+              - expr: "slo_error_budget_remaining"
+          - title: "Burn Rate"
+            type: "graph"
+            targets:
+              - expr: "slo_error_budget_burn_rate"
+              
+      - name: "SLO Details"
+        description: "Detailed SLO metrics and trends"
+        panels:
+          - title: "SLI Trends"
+            type: "graph"
+            targets:
+              - expr: "sli_value"
+          - title: "Error Budget Consumption"
+            type: "heatmap"
+            targets:
+              - expr: "slo_error_budget_burn_rate"
+              
+    # Reporting configuration
+    reporting:
+      frequency: "weekly"
+      recipients:
+        - "sre-team@company.com"
+        - "product-team@company.com"
+      include_metrics:
+        - "slo_status_summary"
+        - "error_budget_consumption"
+        - "sli_trends"
+        - "alert_summary"

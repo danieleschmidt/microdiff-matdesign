@@ -1,0 +1,461 @@
+# Advanced Multi-Layer Security Scanning Workflow
+# Comprehensive security analysis including SAST, DAST, SCA, and IaC scanning
+
+name: Advanced Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly on Mondays at 2 AM
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of scan to run'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - sast-only
+          - sca-only
+          - container-only
+          - iac-only
+      severity_threshold:
+        description: 'Minimum severity to fail on'
+        required: true
+        default: 'HIGH'
+        type: choice
+        options:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Static Application Security Testing (SAST)
+  sast-analysis:
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'sast-only' || github.event.inputs.scan_type == null
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    
+    strategy:
+      matrix:
+        tool: [codeql, semgrep, bandit]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install bandit[toml] safety
+      
+      # CodeQL Analysis
+      - name: Initialize CodeQL
+        if: matrix.tool == 'codeql'
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: security-extended,security-and-quality
+      
+      - name: Autobuild
+        if: matrix.tool == 'codeql'
+        uses: github/codeql-action/autobuild@v3
+      
+      - name: Perform CodeQL Analysis
+        if: matrix.tool == 'codeql'
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
+      
+      # Semgrep SAST
+      - name: Run Semgrep
+        if: matrix.tool == 'semgrep'
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >
+            p/security-audit
+            p/secrets
+            p/python
+            p/django
+            p/flask
+            p/docker
+            p/kubernetes
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+      
+      # Bandit Python Security Scanner
+      - name: Run Bandit
+        if: matrix.tool == 'bandit'
+        run: |
+          bandit -r microdiff_matdesign/ -f json -o bandit-results.json || true
+          bandit -r microdiff_matdesign/ -f sarif -o bandit-results.sarif || true
+      
+      - name: Upload Bandit SARIF
+        if: matrix.tool == 'bandit'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit-results.sarif
+      
+      - name: Upload Bandit results
+        if: matrix.tool == 'bandit'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-results
+          path: bandit-results.json
+  
+  # Software Composition Analysis (SCA)
+  sca-analysis:
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'sca-only' || github.event.inputs.scan_type == null
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install safety pip-audit cyclonedx-bom
+      
+      # Safety - Python dependency vulnerabilities
+      - name: Run Safety scan
+        run: |
+          safety check --json --output safety-results.json || true
+          safety check --output safety-results.txt || true
+      
+      # Pip-audit - Official PyPA tool
+      - name: Run pip-audit
+        run: |
+          pip-audit --format=json --output=pip-audit-results.json || true
+          pip-audit --format=sarif --output=pip-audit-results.sarif || true
+      
+      - name: Upload pip-audit SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: pip-audit-results.sarif
+      
+      # Generate SBOM
+      - name: Generate SBOM
+        run: |
+          cyclonedx-py --format json --output sbom-python.json .
+          cyclonedx-py --format xml --output sbom-python.xml .
+      
+      # OSV Scanner
+      - name: Run OSV Scanner
+        uses: google/osv-scanner-action@v1
+        with:
+          scan-args: |
+            --output=osv-results.json
+            --format=json
+            ./
+        continue-on-error: true
+      
+      - name: Upload SCA results
+        uses: actions/upload-artifact@v4
+        with:
+          name: sca-results
+          path: |
+            safety-results.*
+            pip-audit-results.*
+            sbom-python.*
+            osv-results.json
+  
+  # Container Security Scanning
+  container-security:
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'container-only' || github.event.inputs.scan_type == null
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build test image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: microdiff-test:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      # Trivy container scan
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'microdiff-test:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: ${{ github.event.inputs.severity_threshold || 'HIGH' }}
+      
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      # Anchore Grype scan
+      - name: Run Anchore Grype scan
+        uses: anchore/scan-action@v3
+        id: scan
+        with:
+          image: 'microdiff-test:latest'
+          format: sarif
+          output-file: grype-results.sarif
+          severity-cutoff: ${{ github.event.inputs.severity_threshold || 'high' }}
+      
+      - name: Upload Grype scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: grype-results.sarif
+      
+      # Docker Scout (if available)
+      - name: Docker Scout scan
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: microdiff-test:latest
+          format: sarif
+          output: scout-results.sarif
+        continue-on-error: true
+      
+      - name: Upload container scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-security-results
+          path: |
+            trivy-results.sarif
+            grype-results.sarif
+            scout-results.sarif
+  
+  # Infrastructure as Code (IaC) Security
+  iac-security:
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'iac-only' || github.event.inputs.scan_type == null
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Checkov - IaC security scanner
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: dockerfile,kubernetes,terraform,github_configuration
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+          download_external_modules: true
+        continue-on-error: true
+      
+      - name: Upload Checkov results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results.sarif
+      
+      # Trivy IaC scan
+      - name: Run Trivy IaC scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-iac-results.sarif'
+      
+      - name: Upload Trivy IaC results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-iac-results.sarif
+      
+      # Kube-score for Kubernetes manifests
+      - name: Run kube-score
+        if: hashFiles('kubernetes/**/*.yaml') != ''
+        run: |
+          wget -q https://github.com/zegl/kube-score/releases/latest/download/kube-score_linux_amd64.tar.gz
+          tar xzf kube-score_linux_amd64.tar.gz
+          chmod +x kube-score
+          find kubernetes/ -name '*.yaml' -o -name '*.yml' | xargs ./kube-score score --output-format sarif > kube-score-results.sarif || true
+        continue-on-error: true
+      
+      - name: Upload IaC scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: iac-security-results
+          path: |
+            checkov-results.sarif
+            trivy-iac-results.sarif
+            kube-score-results.sarif
+  
+  # Secrets Detection
+  secrets-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      # TruffleHog secrets scanner
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+      
+      # GitLeaks secrets scanner
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+      
+      # detect-secrets baseline scan
+      - name: Run detect-secrets
+        run: |
+          pip install detect-secrets
+          detect-secrets scan --all-files --force-use-all-plugins --baseline .secrets.baseline || true
+          detect-secrets audit .secrets.baseline || true
+        continue-on-error: true
+  
+  # License Compliance Check
+  license-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pip-licenses licensecheck
+      
+      - name: Check licenses
+        run: |
+          pip-licenses --format=json --output-file=licenses.json
+          pip-licenses --format=csv --output-file=licenses.csv
+          licensecheck --format json --output licenses-check.json || true
+      
+      - name: Upload license results
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-results
+          path: |
+            licenses.*
+  
+  # Consolidate Results
+  security-report:
+    if: always()
+    needs: [sast-analysis, sca-analysis, container-security, iac-security, secrets-scan, license-scan]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+      
+      - name: Generate security summary
+        run: |
+          echo "# Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if any critical issues were found
+          if find . -name '*.sarif' | xargs grep -l '"level": "error"' > /dev/null 2>&1; then
+            echo "⚠️ Critical security issues found!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ No critical security issues found" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "### Scans Performed:" >> $GITHUB_STEP_SUMMARY
+          echo "- Static Application Security Testing (SAST)" >> $GITHUB_STEP_SUMMARY
+          echo "- Software Composition Analysis (SCA)" >> $GITHUB_STEP_SUMMARY
+          echo "- Container Security Scanning" >> $GITHUB_STEP_SUMMARY
+          echo "- Infrastructure as Code (IaC) Security" >> $GITHUB_STEP_SUMMARY
+          echo "- Secrets Detection" >> $GITHUB_STEP_SUMMARY
+          echo "- License Compliance" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts Available:" >> $GITHUB_STEP_SUMMARY
+          echo "All scan results have been uploaded as artifacts and submitted to GitHub Security tab." >> $GITHUB_STEP_SUMMARY
+      
+      - name: Create security issue (if critical findings)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Critical Security Issues Found - ' + new Date().toISOString().slice(0,10),
+              body: '## Critical Security Issues Detected\n\n' +
+                    'The security scan workflow has detected critical security issues that require immediate attention.\n\n' +
+                    '### Action Required:\n' +
+                    '1. Review the security scan results in the Actions tab\n' +
+                    '2. Check the GitHub Security tab for detailed findings\n' +
+                    '3. Address all critical and high severity issues\n' +
+                    '4. Re-run the security scan to verify fixes\n\n' +
+                    '### Workflow Run:\n' +
+                    '[Security Scan Results](' + context.payload.repository.html_url + '/actions/runs/' + context.runId + ')\n\n' +
+                    'This issue was automatically created by the security scan workflow.',
+              labels: ['security', 'critical', 'automated']
+            });

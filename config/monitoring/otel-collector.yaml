@@ -1,0 +1,237 @@
+# OpenTelemetry Collector Configuration
+# Comprehensive observability pipeline for MicroDiff-MatDesign
+
+receivers:
+  # OTLP receiver for application traces and metrics
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "http://localhost:3000"
+            - "http://localhost:8080"
+  
+  # Prometheus receiver
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'microdiff-metrics'
+          scrape_interval: 30s
+          static_configs:
+            - targets: ['localhost:8000']
+  
+  # Host metrics receiver
+  hostmetrics:
+    collection_interval: 10s
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+      disk:
+        metrics:
+          system.disk.io.time:
+            enabled: true
+      network:
+        metrics:
+          system.network.io:
+            enabled: true
+      process:
+        mute_process_name_error: true
+        mute_process_exe_error: true
+        mute_process_io_error: true
+  
+  # Docker stats receiver
+  docker_stats:
+    endpoint: unix:///var/run/docker.sock
+    collection_interval: 10s
+    timeout: 5s
+    
+  # File log receiver
+  filelog:
+    include:
+      - /app/logs/*.log
+      - /var/log/microdiff/*.log
+    include_file_name: true
+    include_file_path: true
+    operators:
+      - type: json_parser
+        timestamp:
+          parse_from: attributes.timestamp
+          layout: '%Y-%m-%d %H:%M:%S'
+      - type: severity_parser
+        parse_from: attributes.level
+      - type: trace_parser
+        trace_id:
+          parse_from: attributes.trace_id
+        span_id:
+          parse_from: attributes.span_id
+
+processors:
+  # Batch processor
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+    
+  # Memory limiter
+  memory_limiter:
+    limit_mib: 512
+    
+  # Resource processor
+  resource:
+    attributes:
+      - key: service.name
+        value: microdiff-matdesign
+        action: upsert
+      - key: service.version
+        from_attribute: app.version
+        action: upsert
+      - key: deployment.environment
+        from_attribute: env
+        action: upsert
+      - key: host.name
+        from_attribute: host.hostname
+        action: upsert
+        
+  # Attributes processor
+  attributes:
+    actions:
+      - key: sensitive_data
+        action: delete
+      - key: user_data
+        action: delete
+      - key: http.request.body
+        action: delete
+        
+  # Transform processor for custom metrics
+  transform:
+    metric_statements:
+      - context: metric
+        statements:
+          - set(description, "Custom MicroDiff metric") where name == "microdiff_inference_duration"
+          - set(unit, "ms") where name == "microdiff_inference_duration"
+          
+  # Span processor
+  span:
+    name:
+      to_attributes:
+        rules:
+          - ^/api/(?P<api_version>v\d+)/(?P<endpoint>.*)
+        
+  # Filter processor
+  filter:
+    metrics:
+      exclude:
+        match_type: strict
+        metric_names:
+          - go_memstats_alloc_bytes
+          - go_memstats_alloc_bytes_total
+    traces:
+      exclude:
+        match_type: regexp
+        span_names:
+          - ".*/health"
+          - ".*/metrics"
+
+exporters:
+  # Prometheus exporter
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: "microdiff"
+    const_labels:
+      service: "microdiff-matdesign"
+      
+  # Jaeger exporter
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+      
+  # OTLP HTTP exporter (for external observability platforms)
+  otlphttp:
+    endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+    headers:
+      Authorization: "Bearer ${OTEL_EXPORTER_OTLP_TOKEN}"
+      
+  # Logging exporter (for debugging)
+  logging:
+    loglevel: info
+    sampling_initial: 5
+    sampling_thereafter: 200
+    
+  # File exporter for backup
+  file:
+    path: /tmp/otel-data.json
+    rotation:
+      max_megabytes: 100
+      max_days: 7
+      max_backups: 3
+
+extensions:
+  # Health check extension
+  health_check:
+    endpoint: 0.0.0.0:13133
+    
+  # PPP extension for debugging
+  pprof:
+    endpoint: 0.0.0.0:1777
+    
+  # ZPages extension
+  zpages:
+    endpoint: 0.0.0.0:55679
+    
+  # Memory ballast extension
+  memory_ballast:
+    size_mib: 64
+
+service:
+  extensions: [health_check, pprof, zpages, memory_ballast]
+  
+  pipelines:
+    # Traces pipeline
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, attributes, span, batch]
+      exporters: [jaeger, otlphttp, logging]
+      
+    # Metrics pipeline
+    metrics:
+      receivers: [otlp, prometheus, hostmetrics, docker_stats]
+      processors: [memory_limiter, resource, attributes, transform, filter, batch]
+      exporters: [prometheus, otlphttp, logging]
+      
+    # Logs pipeline
+    logs:
+      receivers: [otlp, filelog]
+      processors: [memory_limiter, resource, attributes, batch]
+      exporters: [otlphttp, logging]
+      
+  # Telemetry configuration
+  telemetry:
+    logs:
+      level: "info"
+      development: false
+      sampling:
+        initial: 5
+        thereafter: 200
+    metrics:
+      level: "detailed"
+      address: "0.0.0.0:8888"
+      readers:
+        - periodic:
+            interval: 5000
+            timeout: 1000
+    traces:
+      level: "detailed"
+      processors:
+        - batch:
+            timeout: 1000ms
+            send_batch_size: 1024

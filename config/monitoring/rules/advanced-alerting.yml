@@ -1,0 +1,302 @@
+groups:
+  - name: microdiff.application.alerts
+    interval: 30s
+    rules:
+      # High-level application alerts
+      - alert: MicroDiffServiceDown
+        expr: up{job="microdiff-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: microdiff-matdesign
+        annotations:
+          summary: "MicroDiff service is down"
+          description: "MicroDiff application has been down for more than 1 minute"
+          runbook_url: "https://docs.microdiff.ai/runbooks/service-down"
+          
+      - alert: MicroDiffHighErrorRate
+        expr: |
+          (
+            rate(http_requests_total{job="microdiff-app", code=~"5.."}[5m]) /
+            rate(http_requests_total{job="microdiff-app"}[5m])
+          ) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 10% for more than 2 minutes"
+          
+      - alert: MicroDiffHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket{job="microdiff-app"}[5m])
+          ) > 2.0
+        for: 3m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+        annotations:
+          summary: "High response latency detected"
+          description: "95th percentile latency is above 2 seconds for more than 3 minutes"
+          
+      - alert: MicroDiffInferenceLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(microdiff_inference_duration_seconds_bucket[5m])
+          ) > 10.0
+        for: 5m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          component: inference
+        annotations:
+          summary: "High model inference latency"
+          description: "Model inference is taking longer than 10 seconds (95th percentile)"
+          
+  - name: microdiff.resource.alerts
+    interval: 30s
+    rules:
+      # Resource utilization alerts
+      - alert: MicroDiffHighCPUUsage
+        expr: |
+          rate(process_cpu_seconds_total{job="microdiff-app"}[5m]) * 100 > 80
+        for: 3m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          resource: cpu
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 80% for more than 3 minutes"
+          
+      - alert: MicroDiffHighMemoryUsage
+        expr: |
+          (process_resident_memory_bytes{job="microdiff-app"} / 1024 / 1024 / 1024) > 8
+        for: 2m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          resource: memory
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 8GB for more than 2 minutes"
+          
+      - alert: MicroDiffOutOfMemory
+        expr: |
+          (process_resident_memory_bytes{job="microdiff-app"} / 1024 / 1024 / 1024) > 15
+        for: 1m
+        labels:
+          severity: critical
+          service: microdiff-matdesign
+          resource: memory
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is above 15GB - possible memory leak or resource exhaustion"
+          
+  - name: microdiff.gpu.alerts
+    interval: 30s
+    rules:
+      # GPU-specific alerts
+      - alert: MicroDiffGPUUnavailable
+        expr: microdiff_gpu_available == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: microdiff-matdesign
+          resource: gpu
+        annotations:
+          summary: "GPU unavailable"
+          description: "GPU is not available for model inference"
+          
+      - alert: MicroDiffGPUHighUtilization
+        expr: microdiff_gpu_utilization_percent > 95
+        for: 5m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          resource: gpu
+        annotations:
+          summary: "High GPU utilization"
+          description: "GPU utilization is above 95% for more than 5 minutes"
+          
+      - alert: MicroDiffGPUMemoryHigh
+        expr: microdiff_gpu_memory_used_percent > 90
+        for: 3m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          resource: gpu-memory
+        annotations:
+          summary: "High GPU memory usage"
+          description: "GPU memory usage is above 90% for more than 3 minutes"
+          
+      - alert: MicroDiffGPUTemperatureHigh
+        expr: microdiff_gpu_temperature_celsius > 85
+        for: 2m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          resource: gpu
+        annotations:
+          summary: "High GPU temperature"
+          description: "GPU temperature is above 85°C for more than 2 minutes"
+          
+  - name: microdiff.model.alerts
+    interval: 60s
+    rules:
+      # Model-specific alerts
+      - alert: MicroDiffModelLoadingFailure
+        expr: increase(microdiff_model_loading_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: microdiff-matdesign
+          component: model
+        annotations:
+          summary: "Model loading failures detected"
+          description: "Model is failing to load - check model files and dependencies"
+          
+      - alert: MicroDiffModelAccuracyDegradation
+        expr: microdiff_model_accuracy_score < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          component: model
+        annotations:
+          summary: "Model accuracy degradation"
+          description: "Model accuracy has dropped below 80% - possible data drift or model degradation"
+          
+      - alert: MicroDiffPredictionQueueBacklog
+        expr: microdiff_prediction_queue_size > 100
+        for: 2m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          component: queue
+        annotations:
+          summary: "Prediction queue backlog"
+          description: "Prediction queue has more than 100 pending items"
+          
+  - name: microdiff.data.alerts
+    interval: 60s
+    rules:
+      # Data quality alerts
+      - alert: MicroDiffDataValidationFailure
+        expr: increase(microdiff_data_validation_failures_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          component: data
+        annotations:
+          summary: "High data validation failure rate"
+          description: "More than 5 data validation failures in the last 5 minutes"
+          
+      - alert: MicroDiffImageProcessingFailure
+        expr: increase(microdiff_image_processing_failures_total[5m]) > 3
+        for: 1m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          component: imaging
+        annotations:
+          summary: "Image processing failures"
+          description: "More than 3 image processing failures in the last 5 minutes"
+          
+  - name: microdiff.security.alerts
+    interval: 300s
+    rules:
+      # Security-related alerts
+      - alert: MicroDiffHighAuthFailureRate
+        expr: |
+          rate(http_requests_total{job="microdiff-app", code="401"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          security: authentication
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Authentication failure rate is above 0.1 requests/second"
+          
+      - alert: MicroDiffSuspiciousTraffic
+        expr: |
+          rate(http_requests_total{job="microdiff-app"}[1m]) > 100
+        for: 2m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          security: traffic
+        annotations:
+          summary: "Suspicious traffic pattern"
+          description: "Request rate is above 100 requests/second - possible DDoS or abuse"
+          
+  - name: microdiff.business.alerts
+    interval: 300s
+    rules:
+      # Business logic alerts
+      - alert: MicroDiffLowProcessingThroughput
+        expr: |
+          rate(microdiff_microstructures_processed_total[15m]) < 0.1
+        for: 10m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          business: throughput
+        annotations:
+          summary: "Low processing throughput"
+          description: "Microstructure processing rate is below expected levels"
+          
+      - alert: MicroDiffParameterGenerationFailure
+        expr: |
+          rate(microdiff_parameter_generation_failures_total[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          business: generation
+        annotations:
+          summary: "Parameter generation failures"
+          description: "Parameter generation failure rate is above acceptable levels"
+          
+  - name: microdiff.infrastructure.alerts
+    interval: 60s
+    rules:
+      # Infrastructure alerts
+      - alert: MicroDiffDiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/app/data"} / 
+           node_filesystem_size_bytes{mountpoint="/app/data"}) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          infrastructure: storage
+        annotations:
+          summary: "Low disk space"
+          description: "Available disk space is below 10%"
+          
+      - alert: MicroDiffContainerRestarting
+        expr: increase(container_start_time_seconds{name=~"microdiff.*"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: microdiff-matdesign
+          infrastructure: container
+        annotations:
+          summary: "Container restarting"
+          description: "MicroDiff container has restarted - check logs for issues"
+          
+      - alert: MicroDiffDatabaseConnectionFailure
+        expr: microdiff_database_connection_failures_total > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: microdiff-matdesign
+          infrastructure: database
+        annotations:
+          summary: "Database connection failure"
+          description: "Unable to connect to database - check database health"
