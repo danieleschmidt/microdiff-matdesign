@@ -1,0 +1,139 @@
+{
+  "timestamp": "2025-08-25T11:40:12.080564",
+  "generation": 2,
+  "target_properties": {
+    "tensile_strength": 1300.0,
+    "elongation": 15.0,
+    "density": 0.98,
+    "grain_size": 35.0
+  },
+  "config": {
+    "num_qubits": 8,
+    "max_retry_attempts": 3,
+    "timeout_seconds": 30.0,
+    "validation_enabled": true
+  },
+  "results": [
+    {
+      "parameters": {
+        "laser_power": 156.71063770574253,
+        "scan_speed": 835.0501525505344,
+        "layer_thickness": 21.111793756075507,
+        "hatch_spacing": 80.35303213893697,
+        "powder_bed_temp": 61.98394566153369,
+        "scan_strategy_angle": 49.12228616467961
+      },
+      "predicted_properties": {
+        "tensile_strength": 848.8059156006786,
+        "elongation": 11.169977766183058,
+        "density": 0.97,
+        "grain_size": 36.458957557641796
+      },
+      "quantum_advantage": 0.5000000000000001,
+      "confidence": 0.8594211017934834,
+      "breakthrough_score": 0.6517874941351306,
+      "quality_score": 0.8332750515339161,
+      "retry_count": 0,
+      "validation_status": "passed",
+      "error_count": 0
+    },
+    {
+      "parameters": {
+        "laser_power": 156.80492128849232,
+        "scan_speed": 840.6651437749356,
+        "layer_thickness": 21.15355702175828,
+        "hatch_spacing": 80.40053944720204,
+        "powder_bed_temp": 61.978261517373426,
+        "scan_strategy_angle": 47.89014968244427
+      },
+      "predicted_properties": {
+        "tensile_strength": 845.5167968840075,
+        "elongation": 11.418512383932487,
+        "density": 0.97,
+        "grain_size": 39.28622331281305
+      },
+      "quantum_advantage": 0.5,
+      "confidence": 0.8472716743466921,
+      "breakthrough_score": 0.6498177366727264,
+      "quality_score": 0.8323564621399091,
+      "retry_count": 0,
+      "validation_status": "passed",
+      "error_count": 0
+    },
+    {
+      "parameters": {
+        "laser_power": 156.82012201621296,
+        "scan_speed": 841.593606052584,
+        "layer_thickness": 21.16057082454885,
+        "hatch_spacing": 80.4088895441632,
+        "powder_bed_temp": 61.9760363719243,
+        "scan_strategy_angle": 47.691273014229445
+      },
+      "predicted_properties": {
+        "tensile_strength": 844.965004640136,
+        "elongation": 11.463058577948246,
+        "density": 0.97,
+        "grain_size": 39.79295645185858
+      },
+      "quantum_advantage": 0.5000000000000001,
+      "confidence": 0.8451355261481497,
+      "breakthrough_score": 0.6494855995343631,
+      "quality_score": 0.8322041347781242,
+      "retry_count": 0,
+      "validation_status": "passed",
+      "error_count": 0
+    },
+    {
+      "parameters": {
+        "laser_power": 156.962324721142,
+        "scan_speed": 850.2639077401332,
+        "layer_thickness": 21.226252667636953,
+        "hatch_spacing": 80.49018702701811,
+        "powder_bed_temp": 61.93384382101607,
+        "scan_strategy_angle": 45.88943404523844
+      },
+      "predicted_properties": {
+        "tensile_strength": 839.9769965052301,
+        "elongation": 11.908497404330044,
+        "density": 0.97,
+        "grain_size": 44.85717566837702
+      },
+      "quantum_advantage": 0.5,
+      "confidence": 0.8244360038271812,
+      "breakthrough_score": 0.6464887995738637,
+      "quality_score": 0.8308756859016331,
+      "retry_count": 0,
+      "validation_status": "passed",
+      "error_count": 0
+    },
+    {
+      "parameters": {
+        "laser_power": 157.02501461193282,
+        "scan_speed": 853.9749813088474,
+        "layer_thickness": 21.254058995559447,
+        "hatch_spacing": 80.52551577869751,
+        "powder_bed_temp": 61.904934410968885,
+        "scan_strategy_angle": 45.138755377374686
+      },
+      "predicted_properties": {
+        "tensile_strength": 838.0105428614609,
+        "elongation": 12.108028127127382,
+        "density": 0.97,
+        "grain_size": 47.123204689941204
+      },
+      "quantum_advantage": 0.5,
+      "confidence": 0.8155349642476465,
+      "breakthrough_score": 0.6453249060956562,
+      "quality_score": 0.8303898052958015,
+      "retry_count": 0,
+      "validation_status": "passed",
+      "error_count": 0
+    }
+  ],
+  "summary": {
+    "total_candidates": 5,
+    "best_score": 0.6517874941351306,
+    "average_retries": 0.0,
+    "success_rate": 1.0
+  }
+}
