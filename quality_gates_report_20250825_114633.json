@@ -1,0 +1,350 @@
+{
+  "timestamp": "2025-08-25T11:46:33.462971",
+  "execution_time_seconds": 5.298623323440552,
+  "overall_status": "failed",
+  "overall_score": 0.9649122807017544,
+  "quality_gate_results": {
+    "Unit Tests": {
+      "status": "passed",
+      "score": 1.0,
+      "execution_time": 0.011776447296142578,
+      "details": {
+        "total_tests": 16,
+        "passed_tests": 16,
+        "failed_tests": 0,
+        "success_rate": 1.0,
+        "test_results": {
+          "quantum_operations": [
+            {
+              "name": "quantum_state_preparation",
+              "passed": true,
+              "details": "State norm: 0.990"
+            },
+            {
+              "name": "quantum_evolution",
+              "passed": true,
+              "details": "Norm preservation: 0.000"
+            },
+            {
+              "name": "quantum_measurement",
+              "passed": true,
+              "details": "Total probability: 1.000"
+            }
+          ],
+          "materials_prediction": [
+            {
+              "name": "parameter_validation",
+              "passed": true,
+              "details": "All parameters in valid ranges"
+            },
+            {
+              "name": "prediction_consistency",
+              "passed": true,
+              "details": "Prediction consistency verified"
+            },
+            {
+              "name": "property_bounds",
+              "passed": true,
+              "details": "All properties in realistic ranges"
+            }
+          ],
+          "error_handling": [
+            {
+              "name": "invalid_input_handling_0",
+              "passed": true,
+              "details": "Correctly rejected None"
+            },
+            {
+              "name": "invalid_input_handling_1",
+              "passed": true,
+              "details": "Correctly rejected []"
+            },
+            {
+              "name": "invalid_input_handling_2",
+              "passed": true,
+              "details": "Correctly rejected {}"
+            },
+            {
+              "name": "invalid_input_handling_3",
+              "passed": true,
+              "details": "Correctly rejected nan"
+            },
+            {
+              "name": "invalid_input_handling_4",
+              "passed": true,
+              "details": "Correctly rejected inf"
+            },
+            {
+              "name": "error_recovery",
+              "passed": true,
+              "details": "Error recovery mechanisms functional"
+            }
+          ],
+          "scaling": [
+            {
+              "name": "parallel_processing",
+              "passed": true,
+              "details": "Processed 4/4 parallel tasks"
+            },
+            {
+              "name": "caching_functionality",
+              "passed": true,
+              "details": "Cache read/write successful"
+            }
+          ],
+          "validation": [
+            {
+              "name": "input_sanitization",
+              "passed": true,
+              "details": "Input validation successful for all test cases"
+            },
+            {
+              "name": "output_validation",
+              "passed": true,
+              "details": "Output format validation successful"
+            }
+          ]
+        },
+        "coverage_estimate": 0.88
+      },
+      "errors": [],
+      "warnings": [],
+      "recommendations": []
+    },
+    "Security Assessment": {
+      "status": "failed",
+      "score": 0.8947368421052632,
+      "execution_time": 7.343292236328125e-05,
+      "details": {
+        "total_checks": 19,
+        "passed_checks": 17,
+        "critical_issues": 1,
+        "high_issues": 0,
+        "security_score": 0.8947368421052632,
+        "security_results": {
+          "static_analysis": [
+            {
+              "check": "hardcoded_secrets_0",
+              "severity": "critical",
+              "description": "Hardcoded secret detected",
+              "location": "line_0"
+            },
+            {
+              "check": "hardcoded_secrets_1",
+              "severity": "info",
+              "description": "No hardcoded secrets",
+              "location": "line_1"
+            },
+            {
+              "check": "hardcoded_secrets_2",
+              "severity": "info",
+              "description": "No hardcoded secrets",
+              "location": "line_2"
+            },
+            {
+              "check": "sql_injection_0",
+              "severity": "info",
+              "description": "Safe parameterized query",
+              "location": "query_0"
+            },
+            {
+              "check": "sql_injection_1",
+              "severity": "info",
+              "description": "Safe parameterized query",
+              "location": "query_1"
+            }
+          ],
+          "dependencies": [
+            {
+              "check": "dependency_numpy",
+              "severity": "info",
+              "description": "No known vulnerabilities in numpy 1.21.0",
+              "location": "numpy@1.21.0"
+            },
+            {
+              "check": "dependency_torch",
+              "severity": "info",
+              "description": "No known vulnerabilities in torch 1.12.0",
+              "location": "torch@1.12.0"
+            },
+            {
+              "check": "dependency_old-package",
+              "severity": "medium",
+              "description": "Vulnerability in old-package 1.0.0: Outdated package with security issues",
+              "location": "old-package@1.0.0"
+            }
+          ],
+          "input_validation": [
+            {
+              "check": "input_validation_0",
+              "severity": "info",
+              "description": "Successfully blocked XSS attempt",
+              "location": "input_0"
+            },
+            {
+              "check": "input_validation_1",
+              "severity": "info",
+              "description": "Successfully blocked SQL Injection attempt",
+              "location": "input_1"
+            },
+            {
+              "check": "input_validation_2",
+              "severity": "info",
+              "description": "Successfully blocked Path Traversal attempt",
+              "location": "input_2"
+            },
+            {
+              "check": "input_validation_3",
+              "severity": "info",
+              "description": "Successfully blocked Path Traversal attempt",
+              "location": "input_3"
+            }
+          ],
+          "data_protection": [
+            {
+              "check": "encryption_at_rest",
+              "severity": "info",
+              "description": "Data encryption at rest",
+              "location": "data_storage"
+            },
+            {
+              "check": "encryption_in_transit",
+              "severity": "info",
+              "description": "Data encryption in transit",
+              "location": "network_communication"
+            },
+            {
+              "check": "pii_handling",
+              "severity": "info",
+              "description": "Compliant PII handling",
+              "location": "data_processing"
+            }
+          ],
+          "authentication": [
+            {
+              "check": "authentication_strength",
+              "severity": "info",
+              "description": "Strong authentication implemented",
+              "location": "authentication_module"
+            },
+            {
+              "check": "multi_factor_authentication",
+              "severity": "low",
+              "description": "MFA not implemented (recommended)",
+              "location": "authentication_module"
+            },
+            {
+              "check": "role_based_access_control",
+              "severity": "info",
+              "description": "RBAC implemented",
+              "location": "authorization_module"
+            },
+            {
+              "check": "least_privilege_principle",
+              "severity": "info",
+              "description": "Least privilege principle followed",
+              "location": "authorization_module"
+            }
+          ]
+        }
+      },
+      "errors": [
+        "Found 1 critical security issues"
+      ],
+      "warnings": [],
+      "recommendations": []
+    },
+    "Performance Benchmark": {
+      "status": "passed",
+      "score": 1.0,
+      "execution_time": 5.284853935241699,
+      "details": {
+        "performance_score": 1.0,
+        "benchmark_results": {
+          "response_time": {
+            "status": "passed",
+            "avg_response_time_ms": 1.1104726791381836,
+            "p95_response_time_ms": 1.1398792266845703,
+            "threshold_ms": 200,
+            "meets_threshold": true,
+            "num_requests": 100
+          },
+          "throughput": {
+            "status": "passed",
+            "throughput_rps": 452.05727924128263,
+            "threshold_rps": 100,
+            "meets_threshold": true,
+            "test_duration_s": 5.0015785694122314,
+            "requests_processed": 2261
+          },
+          "memory_usage": {
+            "status": "passed",
+            "memory_usage_mb": 7.62939453125,
+            "threshold_mb": 1024,
+            "meets_threshold": true
+          },
+          "cpu_usage": {
+            "status": "passed",
+            "cpu_usage_percent": 17.7764892578125,
+            "threshold_percent": 80,
+            "meets_threshold": true,
+            "processing_time_s": 0.0177764892578125
+          },
+          "scalability": {
+            "status": "passed",
+            "scalability_results": [
+              {
+                "load": 10,
+                "processing_time_s": 0.0019676685333251953,
+                "throughput_rps": 5082.156791469769
+              },
+              {
+                "load": 50,
+                "processing_time_s": 0.009390115737915039,
+                "throughput_rps": 5324.748000507808
+              },
+              {
+                "load": 100,
+                "processing_time_s": 0.018970489501953125,
+                "throughput_rps": 5271.3452644279105
+              },
+              {
+                "load": 200,
+                "processing_time_s": 0.03722953796386719,
+                "throughput_rps": 5372.07848762744
+              }
+            ],
+            "avg_throughput_ratio": 1.0189381123101204,
+            "scales_well": true,
+            "load_levels_tested": [
+              10,
+              50,
+              100,
+              200
+            ]
+          }
+        },
+        "thresholds": {
+          "response_time_ms": 200,
+          "throughput_rps": 100,
+          "memory_usage_mb": 1024,
+          "cpu_usage_percent": 80
+        },
+        "critical_failures": 0
+      },
+      "errors": [],
+      "warnings": [],
+      "recommendations": []
+    }
+  },
+  "summary": {
+    "total_gates": 3,
+    "passed_gates": 2,
+    "failed_gates": 1,
+    "warning_gates": 0,
+    "total_errors": 1,
+    "total_warnings": 0,
+    "grade": "A+",
+    "ready_for_production": false
+  }
+}

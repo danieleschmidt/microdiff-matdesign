@@ -1,0 +1,78 @@
+{
+  "timestamp": "2025-08-25T11:37:21.117888",
+  "target_properties": {
+    "tensile_strength": 1200.0,
+    "elongation": 12.0,
+    "density": 0.97,
+    "grain_size": 45.0
+  },
+  "config": {
+    "num_qubits": 8,
+    "quantum_layers": 3,
+    "material_dimensions": 6
+  },
+  "results": [
+    {
+      "parameters": {
+        "laser_power": 153.13159897277566,
+        "scan_speed": 614.133757170982,
+        "layer_thickness": 20.522219512261863,
+        "hatch_spacing": 85.17177015363971,
+        "powder_bed_temp": 81.43244773901921,
+        "scan_strategy_angle": 7.006970101693852
+      },
+      "predicted_properties": {
+        "tensile_strength": 817.4561951857622,
+        "elongation": 11.1670401913605,
+        "density": 0.96,
+        "grain_size": 49.98266965705299
+      },
+      "quantum_advantage": 1.0,
+      "confidence": 0.8870684092636492,
+      "breakthrough_score": 0.8069701334773937,
+      "generation_time": 1.004284143447876
+    },
+    {
+      "parameters": {
+        "laser_power": 153.36744245660702,
+        "scan_speed": 614.6203319945531,
+        "layer_thickness": 20.476800089629393,
+        "hatch_spacing": 85.05293422752472,
+        "powder_bed_temp": 81.45482610771344,
+        "scan_strategy_angle": 7.018048071634252
+      },
+      "predicted_properties": {
+        "tensile_strength": 813.9816317690834,
+        "elongation": 11.567643460432484,
+        "density": 0.96,
+        "grain_size": 54.794620373504856
+      },
+      "quantum_advantage": 1.0,
+      "confidence": 0.8722808183729052,
+      "breakthrough_score": 0.8058431490099255,
+      "generation_time": 1.0036113262176514
+    },
+    {
+      "parameters": {
+        "laser_power": 153.51450202677313,
+        "scan_speed": 614.9726406687279,
+        "layer_thickness": 20.451792692940263,
+        "hatch_spacing": 84.97284763983826,
+        "powder_bed_temp": 81.4363753101474,
+        "scan_strategy_angle": 7.02015299477141
+      },
+      "predicted_properties": {
+        "tensile_strength": 812.1206992254827,
+        "elongation": 11.806402660410846,
+        "density": 0.96,
+        "grain_size": 57.6625350535352
+      },
+      "quantum_advantage": 1.0,
+      "confidence": 0.86373224421978,
+      "breakthrough_score": 0.8052966307530862,
+      "generation_time": 1.004021167755127
+    }
+  ],
+  "best_breakthrough_score": 0.8069701334773937,
+  "total_candidates": 3
+}
