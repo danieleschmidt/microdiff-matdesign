@@ -1,402 +1,157 @@
-# MicroDiff Materials Design
+# microdiff-matdesign
 
-[![Quality Gates](https://img.shields.io/badge/Quality%20Gates-6%2F6%20Passed-brightgreen)](AUTONOMOUS_SDLC_REPORT.md)
-[![Global Ready](https://img.shields.io/badge/Global%20Ready-4%2F4%20Regions-blue)](test_global_features.py)
-[![GDPR Compliant](https://img.shields.io/badge/GDPR-Compliant-green)](microdiff_matdesign/utils/compliance.py)
-[![Multi-Language](https://img.shields.io/badge/Languages-12%20Supported-orange)](microdiff_matdesign/utils/internationalization.py)
-[![CI/CD](https://github.com/danieleschmidt/microdiff-matdesign/workflows/CI/badge.svg)](https://github.com/danieleschmidt/microdiff-matdesign/actions)
-[![Coverage](https://codecov.io/gh/danieleschmidt/microdiff-matdesign/branch/main/graph/badge.svg)](https://codecov.io/gh/danieleschmidt/microdiff-matdesign)
-[![Documentation](https://readthedocs.org/projects/microdiff-matdesign/badge/?version=latest)](https://microdiff-matdesign.readthedocs.io/en/latest/)
-[![PyPI version](https://badge.fury.io/py/microdiff-matdesign.svg)](https://badge.fury.io/py/microdiff-matdesign)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+**Diffusion models for inverse material microstructure design.**
 
-**Enterprise-Grade Diffusion Models for Inverse Materials Design**
+Given target material properties (hardness, conductivity), generate the microstructure that should achieve them — using a conditioned denoising diffusion probabilistic model (DDPM).
 
-Diffusion model framework for inverse material design that transforms micro-CT images into printable alloy process parameters. Built with enterprise-grade security, performance optimization, and global compliance features through autonomous SDLC implementation.
+---
 
-> 🎯 **Autonomous SDLC Achievement** - Perfect quality scores (6/6 Grade A) and global deployment readiness (4/4 Grade A) achieved through Terragon Labs' Progressive Enhancement Strategy. See [Autonomous SDLC Report](AUTONOMOUS_SDLC_REPORT.md) for complete implementation details.
+## The Problem
 
-## Overview
+Materials science has a *forward* problem that's well-studied: given a microstructure, predict its properties. The *inverse* problem is harder: given desired properties, find a microstructure that achieves them.
 
-MicroDiff-MatDesign uses state-of-the-art diffusion models to solve the inverse problem in materials science: given desired microstructural properties, what manufacturing parameters will produce them? The system learns the complex relationship between process parameters and resulting microstructures, enabling rapid material optimization.
+Diffusion models are natural here. Instead of searching the microstructure space manually, we train a generative model conditioned on target properties and sample from it.
 
-## Key Features
+---
 
-- **Inverse Design**: Generate process parameters from target microstructures
-- **Multi-Scale Modeling**: Handle features from nanometers to millimeters
-- **Process Optimization**: Optimize for multiple objectives (strength, ductility, cost)
-- **Uncertainty Quantification**: Confidence bounds on predicted parameters
-- **Real-Time Generation**: Sub-second parameter generation after training
-- **Multi-Alloy Support**: Pre-trained models for Ti-6Al-4V, Inconel 718, AlSi10Mg
+## What This Does
 
-## Installation
-
-```bash
-# Basic installation
-pip install microdiff-matdesign
-
-# With GPU acceleration
-pip install microdiff-matdesign[gpu]
-
-# With all analysis tools
-pip install microdiff-matdesign[full]
-
-# From source
-git clone https://github.com/danieleschmidt/microdiff-matdesign
-cd microdiff-matdesign
-pip install -e ".[dev]"
+```
+target properties  →  [InverseDesigner]  →  microstructure image
+   (hardness=0.8)     [DiffusionModel]      (2D grain boundary map)
+   (conductivity=0.2) [DDPM reverse]
 ```
 
-## Quick Start
+**Four core components:**
 
-### Basic Inverse Design
+| Class | Role |
+|-------|------|
+| `MicrostructureGenerator` | Synthetic 2D microstructure images via Voronoi tessellation |
+| `MaterialPropertyPredictor` | Small CNN: image → property vector |
+| `DiffusionModel` | DDPM with property conditioning + classifier-free guidance |
+| `InverseDesigner` | High-level API: target properties → microstructure images |
 
-```python
-from microdiff_matdesign import MicrostructureDiffusion
-from microdiff_matdesign.imaging import MicroCTProcessor
+---
 
-# Load and process micro-CT image
-processor = MicroCTProcessor()
-microstructure = processor.load_image(
-    "target_microstructure.tif",
-    voxel_size=0.5  # micrometers
-)
+## Physics Background
 
-# Initialize diffusion model
-model = MicrostructureDiffusion(
-    alloy="Ti-6Al-4V",
-    process="laser_powder_bed_fusion",
-    pretrained=True
-)
+### Microstructure generation
+Polycrystalline materials consist of grains separated by grain boundaries. We approximate these using **Voronoi tessellation** of random seed points — each cell is a grain, boundaries are cell edges.
 
-# Generate process parameters
-parameters = model.inverse_design(
-    target_microstructure=microstructure,
-    num_samples=10,
-    guidance_scale=7.5
-)
+Two phases are modeled:
+- **Primary phase** (gray) — base material
+- **Secondary phase** (white) — precipitates, inclusions, or a second alloy phase
+- **Grain boundaries** — mid-gray pixels at cell edges
 
-print("Optimal parameters:")
-print(f"Laser power: {parameters.laser_power} W")
-print(f"Scan speed: {parameters.scan_speed} mm/s")
-print(f"Layer thickness: {parameters.layer_thickness} μm")
-print(f"Hatch spacing: {parameters.hatch_spacing} μm")
-```
+### Property proxies
+- **Hardness** ∝ grain boundary density + secondary phase fraction (Hall-Petch strengthening)
+- **Conductivity** ∝ 1 − (grain boundary density + secondary phase fraction)
 
-### Training Custom Models
+Fine-grained microstructures (many small grains) → high boundary density → harder, less conductive.
 
-```python
-from microdiff_matdesign import train_diffusion_model
-from microdiff_matdesign.datasets import MicrostructureDataset
-
-# Prepare dataset
-dataset = MicrostructureDataset(
-    image_dir="microct_images/",
-    parameter_file="process_parameters.csv",
-    augment=True,
-    normalize=True
-)
-
-# Train diffusion model
-model = train_diffusion_model(
-    dataset=dataset,
-    architecture="unet3d",
-    diffusion_steps=1000,
-    batch_size=8,
-    epochs=500,
-    learning_rate=1e-4
-)
-
-# Validate on test set
-metrics = model.validate(dataset.test)
-print(f"Parameter prediction MAE: {metrics.mae:.3f}")
-print(f"Microstructure similarity: {metrics.ssim:.3f}")
-```
+---
 
 ## Architecture
 
+### Diffusion Model (DDPM)
+- **Forward process**: `q(x_t | x_{t-1}) = N(x_t; √(1-β_t) x_{t-1}, β_t I)`
+- **Reverse process**: learned noise predictor `ε_θ(x_t, t, c)` where `c` is the property condition
+- **Schedule**: cosine β schedule (Nichol & Dhariwal 2021)
+- **Guidance**: classifier-free guidance (Ho & Salimans 2022) — scale controls condition strength
+
+### U-Net Noise Predictor
 ```
-microdiff-matdesign/
-├── microdiff_matdesign/
-│   ├── models/
-│   │   ├── diffusion/      # Diffusion model architectures
-│   │   ├── encoders/       # Microstructure encoders
-│   │   ├── decoders/       # Parameter decoders
-│   │   └── conditioning/   # Conditional generation
-│   ├── imaging/
-│   │   ├── preprocessing/  # CT image processing
-│   │   ├── segmentation/   # Phase segmentation
-│   │   └── features/       # Microstructure descriptors
-│   ├── optimization/
-│   │   ├── objectives/     # Multi-objective functions
-│   │   ├── constraints/    # Manufacturing constraints
-│   │   └── solvers/        # Optimization algorithms
-│   ├── processes/
-│   │   ├── lpbf/          # Laser powder bed fusion
-│   │   ├── ebm/           # Electron beam melting
-│   │   └── ded/           # Directed energy deposition
-│   └── analysis/          # Post-processing tools
-├── pretrained/            # Pre-trained models
-├── examples/              # Example notebooks
-└── benchmarks/            # Performance benchmarks
+(1, 64, 64) → [enc: 32→64→128] → [bottleneck] → [dec: 128→64→32] → (1, 64, 64)
+```
+- 3 downsampling stages (stride-2 conv), 3 upsampling (transpose conv + skip connections)
+- Time step embedded via sinusoidal encoding → MLP → injected at every ResBlock
+- Property condition projected → MLP → injected at every ResBlock
+
+---
+
+## Quick Start
+
+```bash
+# Install dependencies
+pip install torch numpy scipy
+
+# Run the demo (generates dataset, trains, runs inverse design)
+python demo.py
 ```
 
-## Microstructure Processing
+The demo:
+1. Generates 200 synthetic microstructures with random grain counts and phase fractions
+2. Computes heuristic property labels (hardness, conductivity)
+3. Trains the DDPM for 10 epochs
+4. Generates 5 microstructures targeting hardness values from 0.1 to 0.9
+5. Evaluates and reports achieved vs target properties
 
-### Image Preprocessing
+> **Note:** 10 epochs is a smoke-test. Real convergence requires ~100–500 epochs on a larger dataset. The model clearly learns the conditioning direction early but needs more training to achieve quantitative accuracy.
+
+---
+
+## Usage
 
 ```python
-from microdiff_matdesign.imaging import MicroCTProcessor
-
-processor = MicroCTProcessor()
-
-# Load and preprocess 3D micro-CT scan
-volume = processor.load_volume(
-    "scan_directory/",
-    file_pattern="slice_*.tif"
+from microdiff_matdesign import (
+    MicrostructureGenerator,
+    MaterialPropertyPredictor,
+    DiffusionModel,
+    InverseDesigner,
 )
+import numpy as np
 
-# Denoise and enhance
-processed = processor.preprocess(
-    volume,
-    denoise_method="bm4d",
-    enhance_contrast=True,
-    remove_artifacts=True
-)
+# Generate training data
+gen = MicrostructureGenerator(image_size=64, seed=42)
+images = gen.generate_batch(1000, n_grains_range=(8, 60))
 
-# Segment phases
-phases = processor.segment_phases(
-    processed,
-    num_phases=3,
-    method="watershed"
+# Compute properties
+props = np.array([
+    list(MaterialPropertyPredictor.heuristic_properties(img).values())
+    for img in images
+], dtype="float32")  # shape (1000, 2)
+
+# Train diffusion model
+model = DiffusionModel(image_size=64, T=500, device="cuda")
+model.train_quick(images, props, n_epochs=100, batch_size=32)
+
+# Inverse design: generate hard, conductive microstructure
+designer = InverseDesigner(model, property_names=["hardness", "conductivity"])
+result = designer.design(
+    target_properties=np.array([0.8, 0.6]),  # hard + somewhat conductive
+    n_samples=4,
 )
+designer.print_report(result)
+# result["images"]: shape (4, 1, 64, 64)
 ```
 
-### Feature Extraction
+---
 
-```python
-from microdiff_matdesign.imaging import MicrostructureFeatures
-
-# Extract quantitative features
-features = MicrostructureFeatures()
-
-descriptors = features.extract(
-    microstructure=phases,
-    features=[
-        "grain_size_distribution",
-        "phase_fractions", 
-        "texture_coefficients",
-        "porosity",
-        "surface_roughness"
-    ]
-)
-
-# Visualize features
-features.plot_grain_size_distribution(descriptors)
-features.plot_texture_pole_figures(descriptors)
-```
-
-## Diffusion Models
-
-### Model Architectures
-
-```python
-from microdiff_matdesign.models import DiffusionUNet3D, DiffusionTransformer
-
-# 3D U-Net for volumetric data
-unet_model = DiffusionUNet3D(
-    in_channels=1,
-    out_channels=8,  # Number of process parameters
-    base_channels=64,
-    channel_multipliers=[1, 2, 4, 8],
-    attention_resolutions=[16, 8],
-    num_res_blocks=2
-)
-
-# Transformer for irregular data
-transformer_model = DiffusionTransformer(
-    input_dim=512,
-    hidden_dim=768,
-    num_layers=12,
-    num_heads=12,
-    mlp_ratio=4.0
-)
-```
-
-### Conditional Generation
-
-```python
-from microdiff_matdesign.models import ConditionalDiffusion
-
-# Generate with specific constraints
-model = ConditionalDiffusion(pretrained="ti64_lpbf")
-
-# Specify desired properties
-conditions = {
-    "tensile_strength": 1200,  # MPa
-    "elongation": 10,          # %
-    "density": 0.98,           # relative
-    "grain_size": 50           # micrometers
-}
-
-# Generate parameters satisfying conditions
-parameters = model.conditional_generation(
-    conditions=conditions,
-    num_proposals=100,
-    select_best=True
-)
-```
-
-### Uncertainty Quantification
-
-```python
-from microdiff_matdesign.uncertainty import BayesianDiffusion
-
-# Bayesian diffusion for uncertainty
-bayesian_model = BayesianDiffusion(
-    base_model=model,
-    num_posterior_samples=10
-)
-
-# Get parameters with uncertainty
-params, uncertainty = bayesian_model.predict_with_uncertainty(
-    microstructure,
-    confidence_level=0.95
-)
-
-print("Parameter ranges (95% CI):")
-for param, (low, high) in uncertainty.items():
-    print(f"{param}: [{low:.2f}, {high:.2f}]")
-```
-
-## Process-Specific Models
-
-### Laser Powder Bed Fusion (LPBF)
-
-```python
-from microdiff_matdesign.processes import LPBFModel
-
-lpbf = LPBFModel(
-    machine="EOS_M290",
-    powder_properties={
-        "particle_size_d50": 35,  # micrometers
-        "flowability": 25,        # s/50g
-        "apparent_density": 2.5   # g/cm³
-    }
-)
-
-# Optimize for specific microstructure
-optimal_params = lpbf.optimize(
-    target_microstructure=microstructure,
-    constraints={
-        "min_density": 0.995,
-        "max_surface_roughness": 10,  # Ra in micrometers
-        "build_rate": "maximize"
-    }
-)
-
-## 🔬 Advanced Research Capabilities
-
-**NEW**: Enhanced with comprehensive academic research framework including:
-
-- **📊 Benchmarking Suite**: Rigorous comparative evaluation with statistical significance testing
-- **🔄 Reproducibility Controls**: Complete experimental reproducibility with cross-platform validation  
-- **📝 Publication Tools**: Automated manuscript generation and research artifact preservation
-- **📈 Statistical Analysis**: Effect size computation, confidence intervals, and significance testing
-- **🎯 Academic Standards**: Full compliance with peer-review and open science requirements
-
-### Research Features
-
-```python
-from microdiff_matdesign.research import (
-    BenchmarkSuite, ReproducibilityManager, PublicationManager
-)
-
-# Comprehensive model benchmarking
-benchmark = BenchmarkSuite()
-results = benchmark.run_comprehensive_benchmark(
-    config=experiment_config,
-    models=['baseline_diffusion', 'physics_informed', 'bayesian_uncertainty']
-)
-
-# Reproducibility validation
-repro_manager = ReproducibilityManager()
-validation = repro_manager.validate_reproducibility(experiment_func, n_runs=5)
-
-# Publication-ready output
-pub_manager = PublicationManager(config=publication_config)
-manuscript = pub_manager.generate_complete_manuscript(results, validation)
-```
-
-## 🏗️ Development & SDLC
-
-This project implements a comprehensive Software Development Life Cycle (SDLC) with enterprise-grade practices:
-
-### Quick Development Setup
-
-# Clone repository
-git clone https://github.com/danieleschmidt/microdiff-matdesign
-cd microdiff-matdesign
-
-# Setup development environment (recommended)
-docker-compose -f docker-compose.dev.yml up -d
-
-# Or install locally
-pip install -e ".[dev]"
-pre-commit install
-
-# Run tests
-pytest tests/
-
-# Run quality checks
-make lint
-make security-check
-```
-
-### Key SDLC Features
-
-- **🧪 Comprehensive Testing**: Unit, integration, and E2E tests with 85%+ coverage target
-- **🔒 Security-First**: Multi-layer security scanning (SAST, SCA, container, IaC, DAST)
-- **📊 Quality Monitoring**: Automated code quality tracking with trend analysis
-- **🚀 CI/CD Pipeline**: Automated testing, building, and deployment with blue-green strategy
-- **📈 Observability**: Prometheus metrics, Grafana dashboards, and structured logging
-- **🤖 Automation**: Dependency updates, repository maintenance, and metrics collection
-- **📚 Documentation**: Architecture decisions, runbooks, and API documentation
-
-### Repository Structure
+## Project Structure
 
 ```
-microdiff-matdesign/
-├── microdiff_matdesign/     # Core application code
-├── tests/                   # Comprehensive test suite
-├── docs/                    # Documentation and guides
-├── scripts/                 # Automation and utility scripts
-├── config/                  # Configuration files
-├── .github/                 # GitHub workflows and templates
-└── docker-compose*.yml     # Container orchestration
+microdiff_matdesign/
+  __init__.py          — public API
+  generator.py         — MicrostructureGenerator (Voronoi)
+  predictor.py         — MaterialPropertyPredictor (CNN)
+  diffusion.py         — DiffusionModel (DDPM + U-Net)
+  designer.py          — InverseDesigner (pipeline orchestration)
+tests/
+  test_core.py         — 22 tests covering all components
+demo.py                — end-to-end demonstration
 ```
 
-### Development Workflow
+---
 
-1. **Create Feature Branch**: `git checkout -b feature/your-feature`
-2. **Develop with Quality Gates**: Pre-commit hooks ensure code quality
-3. **Test Thoroughly**: Run full test suite before pushing
-4. **Create Pull Request**: Automated CI/CD pipeline validates changes
-5. **Code Review**: Required reviews from code owners
-6. **Deploy**: Automated deployment to staging, then production
+## References
 
-### Documentation
+- Ho et al. (2020) — [Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239)
+- Nichol & Dhariwal (2021) — [Improved Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2102.09672)
+- Ho & Salimans (2022) — [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598)
+- Hall (1951), Petch (1953) — Hall-Petch relationship (grain size → yield strength)
 
-- **[Architecture Guide](docs/ARCHITECTURE.md)**: System design and components
-- **[Contributing Guide](CONTRIBUTING.md)**: Development guidelines and standards
-- **[Setup Guide](docs/SETUP_REQUIRED.md)**: Manual setup requirements
-- **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)**: Complete SDLC overview
-- **[Monitoring Guide](docs/monitoring/README.md)**: Observability and alerting
-- **[Workflow Documentation](docs/workflows/README.md)**: CI/CD pipeline details
+---
 
-### Getting Help
+## License
 
-- **Issues**: Use GitHub issues with appropriate labels
-- **Security**: Follow [security policy](SECURITY.md) for reporting vulnerabilities
-- **Discussions**: Join GitHub Discussions for questions and ideas
-- **Contributing**: See [contributing guidelines](CONTRIBUTING.md) for getting started
+Apache 2.0

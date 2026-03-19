@@ -1,12 +1,19 @@
-"""MicroDiff-MatDesign: Diffusion models for inverse material design."""
+"""
+microdiff-matdesign: Diffusion models for inverse material microstructure design.
+
+Generate synthetic microstructures conditioned on target material properties
+using denoising diffusion probabilistic models (DDPM).
+"""
+
+from .generator import MicrostructureGenerator
+from .predictor import MaterialPropertyPredictor
+from .diffusion import DiffusionModel
+from .designer import InverseDesigner
 
 __version__ = "0.1.0"
-__author__ = "Daniel Schmidt"
-
-from .core import MicrostructureDiffusion
-from .imaging import MicroCTProcessor
-
 __all__ = [
-    "MicrostructureDiffusion",
-    "MicroCTProcessor",
+    "MicrostructureGenerator",
+    "MaterialPropertyPredictor",
+    "DiffusionModel",
+    "InverseDesigner",
 ]
